@@ -15,3 +15,23 @@ services:
     ports:
       - "6379:6379"
     restart: unless-stopped
+
+  ingestion-service:
+    build: ./backend/ingestion-service
+    container_name: ingestion-service
+    environment:
+      - MQTT_BROKER=mqtt-broker
+      - REDIS_HOST=redis
+    depends_on:
+      - mqtt-broker
+      - redis
+    restart: unless-stopped
+
+  fill-estimation-service:
+    build: ./backend/fill-estimation-service
+    container_name: fill-estimation-service
+    environment:
+      - REDIS_HOST=redis
+    depends_on:
+      - redis
+    restart: unless-stopped
