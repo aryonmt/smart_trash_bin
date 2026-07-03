@@ -8,6 +8,7 @@ import logging
 import os
 
 import paho.mqtt.client as mqtt
+import redis
 from pydantic import BaseModel, Field, ValidationError
 
 # Configure logging
@@ -18,10 +19,17 @@ logging.basicConfig(
 )
 logger = logging.getLogger("IngestionService")
 
-# Environment configurations (with default local values)
+# Environment configurations
 MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
 MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
 TELEMETRY_TOPIC = "wastebin/+/+/telemetry"
+
+REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_CHANNEL = "raw-telemetry-channel"
+
+# Initialize Redis client
+redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
 
 
 class TelemetryPayload(BaseModel):
@@ -33,7 +41,6 @@ class TelemetryPayload(BaseModel):
 
 
 def on_connect(client, userdata, flags, rc):
-    """Callback triggered when the client connects to the broker."""
     if rc == 0:
         logger.info(
             f"Connected successfully to MQTT Broker at {MQTT_BROKER}:{MQTT_PORT}"
@@ -45,10 +52,9 @@ def on_connect(client, userdata, flags, rc):
 
 
 def on_message(client, userdata, msg):
-    """Callback triggered when a message is received on a subscribed topic."""
     topic = msg.topic
     payload_str = msg.payload.decode("utf-8")
-    logger.info(f"Received message on topic '{topic}': {payload_str}")
+    logger.info(f"Received MQTT message on '{topic}': {payload_str}")
 
     try:
         # Step 1: Parse JSON
@@ -56,16 +62,18 @@ def on_message(client, userdata, msg):
 
         # Step 2: Validate using Pydantic model
         validated_data = TelemetryPayload(**data)
-        logger.info(
-            f"Data validated successfully for device: {validated_data.device_id}"
-        )
 
-        # TODO: In the next step, publish this validated data to Kafka/RabbitMQ or DB
+        # Step 3: Forward validated data to Redis Pub/Sub channel
+        serialized_msg = validated_data.model_dump_json()
+        redis_client.publish(REDIS_CHANNEL, serialized_msg)
+        logger.info(f"Published validated telemetry to Redis channel '{REDIS_CHANNEL}'")
 
     except json.JSONDecodeError:
         logger.error(f"Failed to decode invalid JSON payload from topic: {topic}")
     except ValidationError as e:
         logger.error(f"Payload validation failed for topic {topic}. Errors: {e.json()}")
+    except Exception as e:
+        logger.error(f"Error publishing to Redis: {e}")
 
 
 def main():
@@ -76,7 +84,6 @@ def main():
 
     try:
         client.connect(MQTT_BROKER, MQTT_PORT, 60)
-        # Keep client running in a blocking loop
         client.loop_forever()
     except Exception as e:
         logger.critical(f"MQTT client connection error: {e}")

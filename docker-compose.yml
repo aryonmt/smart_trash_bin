@@ -1,6 +1,4 @@
 # docker-compose.yml
-version: "3.8"
-
 services:
   mqtt-broker:
     image: eclipse-mosquitto:2.0.18
@@ -9,4 +7,11 @@ services:
       - "1883:1883"
     volumes:
       - ./mosquitto/config:/mosquitto/config
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.2-alpine
+    container_name: redis-cache
+    ports:
+      - "6379:6379"
     restart: unless-stopped
