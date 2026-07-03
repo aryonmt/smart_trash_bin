@@ -1,0 +1,30 @@
+# PlatformIO
+.pio/
+.clang_complete
+.gcc-flags.json
+.project
+.mxproject
+.settings/
+
+# Python / Virtual Environments
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Environment Variables / Secrets
+.env
+*.pem
+*.key
