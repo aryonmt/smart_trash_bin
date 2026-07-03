@@ -1,0 +1,12 @@
+# docker-compose.yml
+version: "3.8"
+
+services:
+  mqtt-broker:
+    image: eclipse-mosquitto:2.0.18
+    container_name: mqtt-broker
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./mosquitto/config:/mosquitto/config
+    restart: unless-stopped
