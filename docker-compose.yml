@@ -72,5 +72,25 @@ services:
       - timescaledb
     restart: unless-stopped
 
+  api-gateway:
+    build: ./backend/api-gateway
+    container_name: api-gateway
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://wastebin_app:securepassword@timescaledb:5432/wastebin
+    depends_on:
+      - timescaledb
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: frontend-dashboard
+    ports:
+      - "80:80"
+    depends_on:
+      - api-gateway
+    restart: unless-stopped
+
 volumes:
   timescale_data:
