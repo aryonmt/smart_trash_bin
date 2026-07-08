@@ -7,6 +7,7 @@ import json
 import logging
 import os
 import time
+from typing import Optional
 
 import paho.mqtt.client as mqtt
 import redis
@@ -34,7 +35,7 @@ STATUS_PATTERN = "wastebin/+/+/status"
 STREAM_TELEMETRY = "raw-telemetry"
 STREAM_STATUS = "device-status"
 
-# Connect to Redis with robust retry loop during startup
+# Connect to Redis with robust retry loop
 redis_client = None
 for attempt in range(1, 11):
     try:
@@ -53,12 +54,12 @@ for attempt in range(1, 11):
 
 
 class TelemetryPayload(BaseModel):
-    """Enhanced validation schema for incoming bin telemetry."""
+    """Resilient validation schema accepting both old and new firmware."""
 
     device_id: str = Field(..., min_length=3)
-    zone_id: str = Field(..., min_length=3)
+    zone_id: Optional[str] = Field(default=None, min_length=3)  # Optional fallback
     distance_cm: float = Field(..., ge=0.0, le=1000.0)
-    sample_count: int = Field(..., ge=1, le=50)
+    sample_count: int = Field(default=11, ge=1, le=50)  # Defaults to 11 if missing
     uptime_s: int = Field(..., ge=0)
 
 
@@ -73,7 +74,6 @@ def on_connect(client, userdata, flags, rc):
 
 
 def handle_telemetry(topic: str, payload_str: str):
-    # Parse hierarchy from topic: wastebin/{zone_id}/{bin_id}/telemetry
     parts = topic.split("/")
     if len(parts) != 4:
         logger.warning(f"Ignored invalid topic structure: {topic}")
@@ -86,7 +86,11 @@ def handle_telemetry(topic: str, payload_str: str):
         raw_data = json.loads(payload_str)
         validated_data = TelemetryPayload(**raw_data)
 
-        # Anti-Spoofing check: Match topic identifiers with payload body identifiers
+        # Resilient fallback: If zone_id is missing in payload, extract it from MQTT topic metadata
+        if not validated_data.zone_id:
+            validated_data.zone_id = topic_zone
+
+        # Anti-Spoofing check
         if (
             validated_data.device_id != topic_bin
             or validated_data.zone_id != topic_zone
@@ -104,27 +108,25 @@ def handle_telemetry(topic: str, payload_str: str):
     except json.JSONDecodeError:
         logger.error(f"Non-JSON payload received on telemetry topic: {topic}")
     except ValidationError as e:
-        logger.error(f"Validation failed for telemetry topic {topic}: {e.json()}")
+        logger.error(f"Payload validation failed for topic {topic}. Error: {e.json()}")
     except Exception as e:
         logger.error(f"Error handling telemetry data ingestion: {e}")
 
 
 def handle_status(topic: str, payload_str: str):
-    # Parse hierarchy: wastebin/{zone_id}/{bin_id}/status
     parts = topic.split("/")
     if len(parts) != 4:
         return
 
     zone_id = parts[1]
     bin_id = parts[2]
-    status = payload_str.strip().lower()  # expected: "online" or "offline"
+    status = payload_str.strip().lower()
 
     if status not in ["online", "offline"]:
         logger.warning(f"Invalid status value ignored: {status}")
         return
 
     try:
-        # Publish status event to status stream
         redis_client.xadd(
             STREAM_STATUS,
             {
@@ -155,7 +157,6 @@ def main():
     client.on_connect = on_connect
     client.on_message = on_message
 
-    # Robust connection retry logic for MQTT Broker
     connected = False
     for attempt in range(1, 11):
         try:
