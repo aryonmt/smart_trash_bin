@@ -16,6 +16,20 @@ services:
       - "6379:6379"
     restart: unless-stopped
 
+  timescaledb:
+    image: timescale/timescaledb:2.15.0-pg16
+    container_name: timescaledb
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=wastebin
+      - POSTGRES_USER=wastebin_app
+      - POSTGRES_PASSWORD=securepassword
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+
   ingestion-service:
     build: ./backend/ingestion-service
     container_name: ingestion-service
@@ -35,3 +49,28 @@ services:
     depends_on:
       - redis
     restart: unless-stopped
+
+  persistence-service:
+    build: ./backend/persistence-service
+    container_name: persistence-service
+    environment:
+      - REDIS_HOST=redis
+      - DATABASE_URL=postgresql://wastebin_app:securepassword@timescaledb:5432/wastebin
+    depends_on:
+      - redis
+      - timescaledb
+    restart: unless-stopped
+
+  alerting-service:
+    build: ./backend/alerting-service
+    container_name: alerting-service
+    environment:
+      - REDIS_HOST=redis
+      - DATABASE_URL=postgresql://wastebin_app:securepassword@timescaledb:5432/wastebin
+    depends_on:
+      - redis
+      - timescaledb
+    restart: unless-stopped
+
+volumes:
+  timescale_data:
