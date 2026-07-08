@@ -27,6 +27,6 @@ constexpr float BIN_DEPTH_CM = 150.0f;
 constexpr float SENSOR_BLIND_ZONE_CM = 20.0f;
 
 // Interval between measurement cycles in milliseconds (e.g., 60 seconds)
-constexpr unsigned long MEASURE_INTERVAL_MS = 60000;
+constexpr unsigned long MEASURE_INTERVAL_MS = 5000;
 
 #endif // CONFIG_H
