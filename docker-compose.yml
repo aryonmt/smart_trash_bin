@@ -5,8 +5,10 @@ services:
     container_name: mqtt-broker
     ports:
       - "1883:1883"
+      - "8883:8883" # Secure MQTTS Port exposed
     volumes:
       - ./mosquitto/config:/mosquitto/config
+      - ./mosquitto/certs:/mosquitto/certs # Mount certificates folder
     restart: unless-stopped
 
   redis:
@@ -35,6 +37,8 @@ services:
     container_name: ingestion-service
     environment:
       - MQTT_BROKER=mqtt-broker
+      - MQTT_USER=ingestion_service
+      - MQTT_PASSWORD=secure_ingestion_pass_2026
       - REDIS_HOST=redis
     depends_on:
       - mqtt-broker

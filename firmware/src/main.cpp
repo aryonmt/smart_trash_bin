@@ -7,13 +7,14 @@
 #include <algorithm>
 #include <cmath>
 #include "config.h"
+#include <WiFiClientSecure.h>
 
 // --- Hardware Pins for Trigger/Echo (Mode 1) ---
 constexpr int TRIGGER_PIN = 12;
 constexpr int ECHO_PIN = 13;
 constexpr int TOTAL_SAMPLE_BURST = 11;
 
-WiFiClient espClient;
+WiFiClientSecure espClient;
 PubSubClient mqttClient(espClient);
 unsigned long lastMeasureTime = 0;
 
@@ -96,8 +97,9 @@ void setupWiFi() {
 }
 
 void connectMQTT() {
+    espClient.setInsecure();
     while (!mqttClient.connected()) {
-        Serial.println("[MQTT] Attempting connection...");
+        Serial.println("[MQTT] Attempting secure TLS connection...");
         String clientId = "BinClient-" + String(DEVICE_ID) + "-" + String(random(0xffff), HEX);
 
         bool connected = mqttClient.connect(

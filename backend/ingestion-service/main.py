@@ -151,11 +151,21 @@ def on_message(client, userdata, msg):
         handle_status(topic, payload_str)
 
 
+# Insert this modification inside the main() function of backend/ingestion-service/main.py
+
+
 def main():
     logger.info("Starting Ingestion Service...")
     client = mqtt.Client(client_id="ingestion_service_consumer")
     client.on_connect = on_connect
     client.on_message = on_message
+
+    # Read credentials from container environment
+    mqtt_user = os.getenv("MQTT_USER")
+    mqtt_password = os.getenv("MQTT_PASSWORD")
+    if mqtt_user and mqtt_password:
+        client.username_pw_set(mqtt_user, mqtt_password)
+        logger.info("Credentials configured for MQTT connection.")
 
     connected = False
     for attempt in range(1, 11):
