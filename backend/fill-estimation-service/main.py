@@ -1,11 +1,12 @@
 # backend/fill-estimation-service/main.py
 # -------------------------------------------------------------------------
-# Listen to validated telemetry and calculate stateful fill estimations
+# Stateful Fill Estimation Service consuming from Redis Streams Group
 # -------------------------------------------------------------------------
 
 import json
 import logging
 import os
+import time
 
 import redis
 from domain.estimator import estimate_fill
@@ -22,58 +23,116 @@ logger = logging.getLogger("FillEstimationService")
 # Environment configurations
 REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
 REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_CHANNEL = "raw-telemetry-channel"
 
-# Initialize Redis client
-redis_client = redis.Redis(host=REDIS_HOST, port=REDIS_PORT, decode_responses=True)
+# Redis Stream Configurations
+STREAM_TELEMETRY = "raw-telemetry"
+STREAM_FILL_UPDATED = "bin-fill-updated"
+CONSUMER_GROUP = "estimation-group"
+CONSUMER_NAME = "estimator-consumer-1"
 
-
-def process_message(raw_msg_str: str):
+# Connect to Redis
+redis_client = None
+for attempt in range(1, 11):
     try:
-        data = json.loads(raw_msg_str)
-        device_id = data["device_id"]
-        raw_distance = data["distance_cm"]
+        redis_client = redis.Redis(
+            host=REDIS_HOST, port=REDIS_PORT, decode_responses=True
+        )
+        redis_client.ping()
+        logger.info(f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
+        break
+    except Exception as e:
+        logger.warning(f"Redis connection attempt {attempt}/10 failed: {e}")
+        if attempt == 10:
+            logger.critical("Could not connect to Redis. Exiting.")
+            exit(1)
+        time.sleep(3)
 
-        # Load configuration for the specific bin (using default values for MVP)
+# Create Redis Stream Consumer Group if it does not exist
+try:
+    redis_client.xgroup_create(STREAM_TELEMETRY, CONSUMER_GROUP, id="0", mkstream=True)
+    logger.info(
+        f"Created consumer group '{CONSUMER_GROUP}' on Stream '{STREAM_TELEMETRY}'"
+    )
+except redis.exceptions.ResponseError as e:
+    if "BUSYGROUP" in str(e):
+        logger.info(f"Consumer group '{CONSUMER_GROUP}' already exists.")
+    else:
+        logger.error(f"Error creating consumer group: {e}")
+        exit(1)
+
+
+def process_stream_entry(message_id: str, fields: dict):
+    try:
+        device_id = fields.get("device_id")
+        zone_id = fields.get("zone_id")
+        raw_distance = float(fields.get("distance_cm"))
+
+        if not device_id or not zone_id:
+            logger.warning(f"Malformed stream entry {message_id} ignored.")
+            return
+
         config = BinConfig()
-
-        # Retrieve previous state from Redis or create a default starting point
         state_key = f"bin_state:{device_id}"
         stored_state = redis_client.get(state_key)
 
         if stored_state:
             state = BinFillState(**json.loads(stored_state))
         else:
-            # Baseline assumes bin is completely empty initially (sensor reads full depth)
             state = BinFillState(confirmed_distance_cm=config.bin_depth_cm)
-            logger.info(f"Initialized new state database for device {device_id}")
+            logger.info(f"Initialized state tracking database for device {device_id}")
 
-        # Execute core filtering algorithm
+        # Run stateful core estimation algorithm
         updated_state, fill_percent, was_emptied = estimate_fill(
             state, config, raw_distance
         )
 
-        # Save updated state back to Redis
+        # Save updated baseline state in Redis key
         redis_client.set(state_key, updated_state.model_dump_json())
 
+        # Publish output metrics on fill-updated stream for downstream services
+        result_payload = {
+            "device_id": device_id,
+            "zone_id": zone_id,
+            "fill_percent": str(fill_percent),
+            "confirmed_distance_cm": str(updated_state.confirmed_distance_cm),
+            "is_emptied": str(int(was_emptied)),
+            "timestamp": str(int(time.time())),
+        }
+        redis_client.xadd(STREAM_FILL_UPDATED, result_payload)
+
         logger.info(
-            f"Device ID: {device_id} | Raw Read: {raw_distance}cm | "
+            f"Device ID: {device_id} | Zone: {zone_id} | Raw: {raw_distance}cm | "
             f"Estimated Fill: {fill_percent}% | Empty Event: {was_emptied}"
         )
 
+        # Acknowledge processed message in consumer group
+        redis_client.xack(STREAM_TELEMETRY, CONSUMER_GROUP, message_id)
+
     except Exception as e:
-        logger.error(f"Error processing telemetry chunk: {e}")
+        logger.error(f"Error processing stream message {message_id}: {e}")
 
 
 def main():
-    logger.info("Starting Fill Estimation Service...")
-    pubsub = redis_client.pubsub()
-    pubsub.subscribe(REDIS_CHANNEL)
-    logger.info(f"Subscribed to validation channel: {REDIS_CHANNEL}")
+    logger.info("Starting Stateful Fill Estimation stream listener...")
+    while True:
+        try:
+            # Read new messages from group
+            # ID '>' means read only new messages that have not been delivered to other consumers
+            streams_data = redis_client.xreadgroup(
+                groupname=CONSUMER_GROUP,
+                consumername=CONSUMER_NAME,
+                streams={STREAM_TELEMETRY: ">"},
+                count=1,
+                block=1000,
+            )
 
-    for message in pubsub.listen():
-        if message["type"] == "message":
-            process_message(message["data"])
+            for stream_name, messages in streams_data:
+                for message_id, fields in messages:
+                    process_stream_entry(message_id, fields)
+
+        except Exception as e:
+            logger.error(f"Stream ingestion loop error: {e}")
+            time.sleep(2)
 
 
 if __name__ == "__main__":
