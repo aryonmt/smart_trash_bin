@@ -57,9 +57,9 @@ def estimate_fill(
             state.confirmed_distance_cm, state.candidate_distance_cm
         )
 
-    # 3. Calculate finalized percentage
-    usable_depth = config.full_line_cm - config.sensor_blind_zone_cm
-    filled_depth = config.full_line_cm - state.confirmed_distance_cm
+    # 3. Calculate finalized percentage (Fixed formula)
+    usable_depth = config.usable_depth_cm
+    filled_depth = config.bin_depth_cm - state.confirmed_distance_cm
 
     percent = (filled_depth / usable_depth) * 100.0
     percent = max(0.0, min(100.0, percent))  # Clamping between 0% and 100%

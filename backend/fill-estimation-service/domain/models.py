@@ -29,5 +29,10 @@ class BinConfig(BaseModel):
 
     @property
     def full_line_cm(self) -> float:
-        """Maximum fill line which is bin depth minus the sensor blind zone."""
+        """Distance from the sensor representing 100% full (blind zone limit)."""
+        return self.bin_depth_cm - self.sensor_blind_zone_cm
+
+    @property
+    def usable_depth_cm(self) -> float:
+        """Effective physical range available for garbage accumulation."""
         return self.bin_depth_cm - self.sensor_blind_zone_cm
