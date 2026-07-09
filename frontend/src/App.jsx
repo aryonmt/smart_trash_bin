@@ -77,6 +77,28 @@ export default function App() {
     }
   };
 
+  const handleManualEmpty = async (binId) => {
+    if (
+      !window.confirm(
+        `Are you sure you want to manually mark ${binId} as emptied?`,
+      )
+    ) {
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/bins/${binId}/empty`, {
+        method: "POST",
+      });
+      if (res.ok) {
+        // Refresh dashboard states instantly
+        fetchData();
+        fetchHistory(binId);
+      }
+    } catch (err) {
+      console.error("Error manual emptying bin:", err);
+    }
+  };
+
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 3000); // Auto-refresh every 3 seconds
@@ -205,13 +227,27 @@ export default function App() {
 
           {/* Section: Chart Area */}
           <section className="bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-xl flex-1 flex flex-col justify-between min-h-[300px]">
-            <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <BarChart2 className="h-5 w-5 text-emerald-500" />
-              Sensory History Chart:{" "}
-              {selectedBin ? selectedBin.bin_id : "Select a bin from registry"}
-            </h2>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-semibold flex items-center gap-2">
+                <BarChart2 className="h-5 w-5 text-emerald-500" />
+                Sensory History Chart:{" "}
+                {selectedBin
+                  ? selectedBin.bin_id
+                  : "Select a bin from registry"}
+              </h2>
+              {selectedBin && (
+                <button
+                  onClick={() => handleManualEmpty(selectedBin.bin_id)}
+                  className="flex items-center space-x-1.5 bg-emerald-500/10 hover:bg-emerald-500 hover:text-white text-emerald-400 px-3.5 py-1.5 rounded-lg text-xs font-semibold transition shadow-md"
+                >
+                  <Trash2 className="h-4 w-4" />
+                  <span>Mark Bin as Emptied</span>
+                </button>
+              )}
+            </div>
 
             {selectedBin ? (
+              // Inside remains exactly same as before (history plotting)
               history.length > 0 ? (
                 <div className="h-64 w-full">
                   <ResponsiveContainer width="100%" height="100%">

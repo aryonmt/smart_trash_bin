@@ -83,8 +83,11 @@ services:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://wastebin_app:securepassword@timescaledb:5432/wastebin
+      - REDIS_HOST=redis # Introduced redis host
+      - REDIS_PORT=6379
     depends_on:
       - timescaledb
+      - redis
     restart: unless-stopped
 
   frontend:
