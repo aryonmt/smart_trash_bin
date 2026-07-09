@@ -2,14 +2,16 @@
 FROM node:20-alpine AS build
 WORKDIR /app
 
-# Copy ONLY package.json (no lockfile required)
-COPY package.json ./
+# Copy package manifests to leverage Docker layer caching.
+# package-lock.json ensures a completely deterministic and stable build via 'npm ci'.
+COPY package.json package-lock.json ./
 
-# Switch to Liara's high-speed domestic Iranian NPM mirror.
-# Bypasses international routing/filtering and caps sockets to prevent WSL2 deadlocks.
-RUN npm config set registry https://package-mirror.liara.ir/repository/npm/ && \
-    npm config set maxsockets 3 && \
-    npm install --progress=false --no-audit --no-fund --verbose
+# Use the default public npm registry. Retry configurations below force transient
+# network drops to fail fast instead of hanging indefinitely.
+RUN npm config set fetch-retries 3 && \
+    npm config set fetch-retry-mintimeout 15000 && \
+    npm config set fetch-retry-maxtimeout 60000 && \
+    npm ci --progress=false --no-audit --no-fund
 
 COPY . .
 RUN npm run build
