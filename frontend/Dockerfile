@@ -1,13 +1,15 @@
 # Stage 1: Build static React bundles
 FROM node:20-alpine AS build
 WORKDIR /app
-COPY package.json package-lock.json* ./
 
-# Optimize npm registry to use a fast mirror and increase timeouts
+# Copy ONLY package.json (no lockfile required)
+COPY package.json ./
+
+# Limit parallel downloads (maxsockets) to 3 to prevent WSL2 virtual network deadlocks.
+# Disable progress bars and audits, and enable verbose logs.
 RUN npm config set registry https://registry.npmmirror.com && \
-    npm config set fetch-retry-mintimeout 20000 && \
-    npm config set fetch-retry-maxtimeout 120000 && \
-    npm install
+    npm config set maxsockets 3 && \
+    npm install --progress=false --no-audit --no-fund --verbose
 
 COPY . .
 RUN npm run build
