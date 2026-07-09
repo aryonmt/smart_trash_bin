@@ -6,7 +6,6 @@
 import logging
 import os
 import time
-from dataclasses import Field
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -18,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg2.extras import RealDictCursor
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 # Configure logging
 logging.basicConfig(
@@ -41,10 +40,12 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 app = FastAPI(title="Smart Waste Bin IoT API Gateway")
 security = HTTPBearer()
 
+# backend/api-gateway/main.py (Modify CORS settings)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # FIXED: Wildcard (*) is now compatible because credentials are not passed via cookies
     allow_methods=["*"],
     allow_headers=["*"],
 )
