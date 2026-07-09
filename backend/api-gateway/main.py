@@ -6,6 +6,7 @@
 import logging
 import os
 import time
+from dataclasses import Field
 from datetime import datetime, timedelta
 from typing import List, Optional
 
@@ -113,6 +114,15 @@ if not redis_client:
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class BinCreateRequest(BaseModel):
+    bin_id: str = Field(..., min_length=3)
+    zone_id: str = Field(..., min_length=3)
+    bin_depth_cm: float = Field(150.0, ge=100.0)
+    label: Optional[str] = None
+    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
 
 
 class TokenResponse(BaseModel):
@@ -391,3 +401,43 @@ def manual_empty_bin(
     except Exception as e:
         logger.error(f"Error manually emptying bin {bin_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal manual empty error")
+
+
+@app.post("/api/bins", status_code=201)
+def create_bin(req: BinCreateRequest, user: dict = Depends(RoleChecker(["admin"]))):
+    """Explicitly registers/provisions a new smart waste bin in the database."""
+    try:
+        now_ts = datetime.utcnow()
+        with db_conn.cursor() as cursor:
+            # Check if bin already exists
+            cursor.execute("SELECT bin_id FROM bins WHERE bin_id = %s;", (req.bin_id,))
+            if cursor.fetchone():
+                raise HTTPException(
+                    status_code=400, detail="Bin with this ID already registered"
+                )
+
+            cursor.execute(
+                "INSERT INTO bins (bin_id, zone_id, bin_depth_cm, label, latitude, longitude, status, provisioned, last_status_at) "
+                "VALUES (%s, %s, %s, %s, %s, %s, 'unknown', TRUE, %s);",
+                (
+                    req.bin_id,
+                    req.zone_id,
+                    req.bin_depth_cm,
+                    req.label,
+                    req.latitude,
+                    req.longitude,
+                    now_ts,
+                ),
+            )
+            logger.info(
+                f"[PROVISIONING] Bin {req.bin_id} explicitly registered by admin user: {user['username']}."
+            )
+            return {
+                "status": "success",
+                "message": f"Bin {req.bin_id} successfully provisioned.",
+            }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error provisioning bin: {e}")
+        raise HTTPException(status_code=500, detail="Failed to register bin")

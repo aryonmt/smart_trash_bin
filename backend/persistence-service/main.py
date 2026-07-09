@@ -83,6 +83,18 @@ def handle_telemetry_entry(msg_id: str, fields: dict):
     ts = datetime.fromtimestamp(int(fields.get("timestamp")))
 
     with db_conn.cursor() as cursor:
+        # Security Guard: Verify if this bin is registered and provisioned
+        cursor.execute("SELECT provisioned FROM bins WHERE bin_id = %s;", (bin_id,))
+        bin_record = cursor.fetchone()
+
+        if not bin_record or not bin_record["provisioned"]:
+            logger.warning(
+                f"[SECURITY ALERT] Blocked incoming telemetry from unauthorized/unprovisioned device ID: {bin_id}. "
+                f"Payload ignored to protect system integrity."
+            )
+            redis_client.xack(STREAM_FILL_UPDATED, GROUP_TELEMETRY, msg_id)
+            return
+
         # 1. Upsert current state in the bins metadata table
         bin_upsert_query = """
             INSERT INTO bins (bin_id, zone_id, current_fill_pct, last_reading_at, last_emptied_at)

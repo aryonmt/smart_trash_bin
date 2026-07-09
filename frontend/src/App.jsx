@@ -155,6 +155,16 @@ function Login({ onLoginSuccess }) {
 
 // --- Page Component: Dashboard Layout ---
 function Dashboard() {
+  // Provisioning form states
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newBinId, setNewBinId] = useState("");
+  const [newZoneId, setNewZoneId] = useState("");
+  const [newDepth, setNewDepth] = useState(150);
+  const [newLabel, setNewLabel] = useState("");
+  const [newLat, setNewLat] = useState("");
+  const [newLng, setNewLng] = useState("");
+  const [formSuccess, setFormSuccess] = useState("");
+  const [formError, setFormError] = useState("");
   const [bins, setBins] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [selectedBin, setSelectedBin] = useState(null);
@@ -255,7 +265,40 @@ function Dashboard() {
       console.error("Failed manual empty process:", err);
     }
   };
+  const handleRegisterBin = async (e) => {
+    e.preventDefault();
+    setFormError("");
+    setFormSuccess("");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/bins`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({
+          bin_id: newBinId,
+          zone_id: newZoneId,
+          bin_depth_cm: parseFloat(newDepth),
+          label: newLabel || null,
+          latitude: newLat ? parseFloat(newLat) : null,
+          longitude: newLng ? parseFloat(newLng) : null,
+        }),
+      });
 
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || "Registration failed");
+      }
+
+      setFormSuccess(`Bin ${newBinId} successfully provisioned!`);
+      setNewBinId("");
+      setNewZoneId("");
+      setNewLabel("");
+      setNewLat("");
+      setNewLng("");
+      fetchData(); // Refresh bin grid instantly
+    } catch (err) {
+      setFormError(err.message);
+    }
+  };
   useEffect(() => {
     fetchData();
     const interval = setInterval(fetchData, 3000);
@@ -285,6 +328,14 @@ function Dashboard() {
         </div>
 
         <div className="flex items-center space-x-4">
+          {userRole === "admin" && (
+            <button
+              onClick={() => setShowAddForm(!showAddForm)}
+              className="bg-emerald-500 hover:bg-emerald-600 text-white px-3.5 py-1.5 rounded-lg transition text-xs font-bold"
+            >
+              {showAddForm ? "Close Panel" : "+ Register New Bin"}
+            </button>
+          )}
           <div className="flex items-center space-x-2 bg-gray-950/60 px-3.5 py-1.5 rounded-lg border border-gray-850">
             <User className="h-4 w-4 text-emerald-500" />
             <span className="text-xs font-semibold">
@@ -311,9 +362,123 @@ function Dashboard() {
       </header>
 
       {/* Main Body */}
+      {/* Main Body Layout */}
       <main className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto w-full">
-        {/* Left 2 Columns */}
+        {/* Left 2 Columns: Provisioning, Live Bins and History Chart */}
         <div className="lg:col-span-2 flex flex-col space-y-6">
+          {/* Provisioning Slide Form Panel (Renders only if toggled by admin) */}
+          {showAddForm && userRole === "admin" && (
+            <section className="bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-xl transition-all duration-300">
+              <h3 className="text-emerald-400 font-bold text-lg mb-4 flex items-center gap-2">
+                <Trash2 className="h-5 w-5" />
+                Provision New Smart Bin
+              </h3>
+
+              {formError && (
+                <div className="bg-red-500/10 border border-red-500 text-red-400 text-xs p-2.5 rounded-lg mb-4 text-center">
+                  {formError}
+                </div>
+              )}
+              {formSuccess && (
+                <div className="bg-emerald-500/10 border border-emerald-500 text-emerald-400 text-xs p-2.5 rounded-lg mb-4 text-center">
+                  {formSuccess}
+                </div>
+              )}
+
+              <form
+                onSubmit={handleRegisterBin}
+                className="grid grid-cols-1 md:grid-cols-3 gap-4"
+              >
+                <div>
+                  <label className="block text-gray-400 text-[10px] font-bold mb-1">
+                    BIN ID *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newBinId}
+                    onChange={(e) => setNewBinId(e.target.value)}
+                    placeholder="e.g. bin-0143"
+                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-[10px] font-bold mb-1">
+                    ZONE ID *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={newZoneId}
+                    onChange={(e) => setNewZoneId(e.target.value)}
+                    placeholder="e.g. district-7"
+                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-[10px] font-bold mb-1">
+                    BIN DEPTH (CM) *
+                  </label>
+                  <input
+                    type="number"
+                    required
+                    value={newDepth}
+                    onChange={(e) => setNewDepth(e.target.value)}
+                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-[10px] font-bold mb-1">
+                    LABEL (LOCATION)
+                  </label>
+                  <input
+                    type="text"
+                    value={newLabel}
+                    onChange={(e) => setNewLabel(e.target.value)}
+                    placeholder="e.g. Central Library Corner"
+                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-[10px] font-bold mb-1">
+                    LATITUDE
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={newLat}
+                    onChange={(e) => setNewLat(e.target.value)}
+                    placeholder="e.g. 35.7001"
+                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-400 text-[10px] font-bold mb-1">
+                    LONGITUDE
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={newLng}
+                    onChange={(e) => setNewLng(e.target.value)}
+                    placeholder="e.g. 51.4002"
+                    className="w-full bg-gray-950 border border-gray-800 rounded-lg p-2.5 text-xs text-white focus:outline-none focus:border-emerald-500"
+                  />
+                </div>
+
+                <div className="md:col-span-3 flex justify-end pt-2">
+                  <button
+                    type="submit"
+                    className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-2.5 px-6 rounded-lg text-xs transition duration-200 shadow-md shadow-emerald-500/10"
+                  >
+                    Authorize and Register Bin
+                  </button>
+                </div>
+              </form>
+            </section>
+          )}
+
+          {/* Bins Grid Section */}
           <section>
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <Trash2 className="h-5 w-5 text-emerald-500" />
@@ -402,7 +567,7 @@ function Dashboard() {
             )}
           </section>
 
-          {/* Section Chart */}
+          {/* Section: Chart Area */}
           <section className="bg-gray-900 border border-gray-800 p-6 rounded-2xl shadow-xl flex-1 flex flex-col justify-between min-h-[300px]">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-lg font-semibold flex items-center gap-2">
@@ -495,7 +660,7 @@ function Dashboard() {
           </section>
         </div>
 
-        {/* Alerts Column */}
+        {/* Right 1 Column: Alerts Management */}
         {userRole !== "driver" && (
           <div className="flex flex-col space-y-6">
             <section className="bg-gray-900 border border-gray-800 p-5 rounded-2xl flex-1 flex flex-col">
