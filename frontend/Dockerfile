@@ -5,9 +5,9 @@ WORKDIR /app
 # Copy ONLY package.json (no lockfile required)
 COPY package.json ./
 
-# Limit parallel downloads (maxsockets) to 3 to prevent WSL2 virtual network deadlocks.
-# Disable progress bars and audits, and enable verbose logs.
-RUN npm config set registry https://registry.npmmirror.com && \
+# Switch to Liara's high-speed domestic Iranian NPM mirror.
+# Bypasses international routing/filtering and caps sockets to prevent WSL2 deadlocks.
+RUN npm config set registry https://package-mirror.liara.ir/repository/npm/ && \
     npm config set maxsockets 3 && \
     npm install --progress=false --no-audit --no-fund --verbose
 
