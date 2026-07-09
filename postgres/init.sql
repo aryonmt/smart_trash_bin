@@ -37,3 +37,23 @@ CREATE TABLE IF NOT EXISTS alerts (
     resolved_at      TIMESTAMPTZ,
     acknowledged_by  TEXT
 );
+
+-- postgres/init.sql (Append to the end of the file)
+
+-- Create table for User accounts and Role-Based Access Control (RBAC)
+CREATE TABLE IF NOT EXISTS users (
+    id           SERIAL PRIMARY KEY,
+    username     TEXT UNIQUE NOT NULL,
+    email        TEXT UNIQUE,
+    password_hash TEXT NOT NULL,
+    role         TEXT NOT NULL DEFAULT 'operator', -- 'admin' | 'operator' | 'driver'
+    zone_scope   TEXT -- Optional restriction to a specific municipal zone
+);
+
+-- Seed a default administrator account
+-- Default Username: admin
+-- Default Password: adminpassword2026
+-- password_hash is a secure pre-calculated bcrypt signature of 'adminpassword2026'
+INSERT INTO users (username, password_hash, role)
+VALUES ('admin', '$2b$12$R9h/lIPzMRgG7K9B1/D7IeK/XoZ9L/e4yNshK9zU/Yqg6l2eO1y0u', 'admin')
+ON CONFLICT (username) DO NOTHING;
