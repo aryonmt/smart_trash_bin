@@ -54,13 +54,43 @@ for attempt in range(1, 11):
     try:
         db_conn = psycopg2.connect(DATABASE_URL, cursor_factory=RealDictCursor)
         db_conn.autocommit = True
-        logger.info("API Gateway connected to TimescaleDB.")
+        logger.info("API Gateway successfully connected to TimescaleDB.")
         break
     except Exception as e:
         logger.warning(f"Database connection attempt {attempt}/10 failed: {e}")
         time.sleep(3)
 if not db_conn:
     exit(1)
+
+try:
+    with db_conn.cursor() as cursor:
+        # Check if users table is populated
+        cursor.execute("SELECT COUNT(*) FROM users;")
+        count_record = cursor.fetchone()
+        user_count = count_record["count"] if count_record else 0
+
+        if user_count == 0:
+            logger.info(
+                "[STARTUP] No users found in database. Initializing default admin user..."
+            )
+            raw_password = "adminpassword2026"
+            # Securely hash password using python-bcrypt inside the container
+            hashed_password = bcrypt.hashpw(
+                raw_password.encode("utf-8"), bcrypt.gensalt()
+            ).decode("utf-8")
+
+            cursor.execute(
+                "INSERT INTO users (username, password_hash, role) VALUES (%s, %s, %s);",
+                ("admin", hashed_password, "admin"),
+            )
+            logger.info(
+                "[STARTUP] Default admin user successfully registered with password hash."
+            )
+except Exception as e:
+    logger.error(
+        f"[STARTUP] Critical warning during users table auto-seeding verification: {e}"
+    )
+
 
 # Connect to Redis
 redis_client = None
