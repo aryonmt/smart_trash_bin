@@ -132,6 +132,7 @@ def handle_status_entry(msg_id: str, fields: dict):
 
 
 def main():
+    global db_conn
     logger.info("Starting Persistence Stream consumer main loop...")
     while True:
         try:
