@@ -82,12 +82,15 @@ def handle_telemetry_entry(msg_id: str, fields: dict):
     is_emptied = bool(int(fields.get("is_emptied")))
     ts = datetime.fromtimestamp(int(fields.get("timestamp")))
 
+    # backend/persistence-service/main.py (Modify the security guard block)
+
     with db_conn.cursor() as cursor:
         # Security Guard: Verify if this bin is registered and provisioned
         cursor.execute("SELECT provisioned FROM bins WHERE bin_id = %s;", (bin_id,))
         bin_record = cursor.fetchone()
 
-        if not bin_record or not bin_record["provisioned"]:
+        # FIXED: Access tuple element by integer index [0] instead of string "provisioned"
+        if not bin_record or not bin_record[0]:
             logger.warning(
                 f"[SECURITY ALERT] Blocked incoming telemetry from unauthorized/unprovisioned device ID: {bin_id}. "
                 f"Payload ignored to protect system integrity."
