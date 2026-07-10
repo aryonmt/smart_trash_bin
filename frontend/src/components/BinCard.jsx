@@ -1,77 +1,110 @@
 // frontend/src/components/BinCard.jsx
 // -------------------------------------------------------------------------
-// BinCard Component - Renders status and progress metrics of a single bin
+// Premium Interactive BinCard - Displays fill level progress and live status
 // -------------------------------------------------------------------------
 
 import React from "react";
-import { Wifi, WifiOff } from "lucide-react";
+import { Wifi, WifiOff, MapPin, Clock } from "lucide-react";
 
 export default function BinCard({ bin, selectedBin, onSelect }) {
   const isOnline = bin.status === "online";
   const isSelected = selectedBin?.bin_id === bin.bin_id;
 
+  // Determine color tokens based on current fill percentage
   const getFillColor = (pct) => {
-    if (pct >= 80) return "bg-red-500 text-red-500 border-red-500";
-    if (pct >= 50) return "bg-yellow-500 text-yellow-500 border-yellow-500";
-    return "bg-green-500 text-green-500 border-green-500";
+    if (pct >= 80) {
+      return {
+        bar: "bg-gradient-to-r from-red-600 to-rose-400 shadow-[0_0_12px_rgba(239,68,68,0.5)]",
+        text: "text-red-400",
+        glow: "shadow-[0_0_20px_rgba(239,68,68,0.15)] border-red-500/30 hover:border-red-500/50",
+      };
+    }
+    if (pct >= 50) {
+      return {
+        bar: "bg-gradient-to-r from-amber-500 to-yellow-400 shadow-[0_0_12px_rgba(245,158,11,0.5)]",
+        text: "text-amber-400",
+        glow: "shadow-[0_0_20px_rgba(245,158,11,0.1)] border-amber-500/30 hover:border-amber-500/50",
+      };
+    }
+    return {
+      bar: "bg-gradient-to-r from-emerald-500 to-teal-400 shadow-[0_0_12px_rgba(16,185,129,0.5)]",
+      text: "text-emerald-400",
+      glow: "shadow-[0_0_20px_rgba(16,185,129,0.1)] border-emerald-500/20 hover:border-emerald-500/40",
+    };
   };
 
-  const fillColorClass = getFillColor(bin.current_fill_pct);
+  const colors = getFillColor(bin.current_fill_pct);
+  const fillPercent =
+    bin.current_fill_pct !== null ? bin.current_fill_pct : 0.0;
 
   return (
     <div
       onClick={() => onSelect(bin)}
-      className={`p-4 rounded-xl border transition cursor-pointer hover:scale-[1.02] flex flex-col justify-between h-44 ${
+      className={`p-5 rounded-2xl border transition-all duration-300 cursor-pointer transform hover:-translate-y-1 ${colors.glow} ${
         isSelected
-          ? "bg-gray-800 border-emerald-500"
-          : "bg-gray-900 border-gray-800"
+          ? "bg-slate-900/80 border-emerald-500/80 shadow-[0_0_30px_rgba(16,185,129,0.15)] ring-1 ring-emerald-500/20"
+          : "bg-slate-900/40 border-slate-800/80"
       }`}
     >
+      {/* Top Row: Bin ID and Status Badges */}
       <div className="flex justify-between items-start">
-        <div>
-          <h3 className="font-bold text-lg">{bin.bin_id}</h3>
-          <span className="text-xs text-gray-400 font-medium px-2 py-0.5 bg-gray-800 rounded">
-            {bin.zone_id}
-          </span>
+        <div className="space-y-1">
+          <h3 className="font-black text-xl tracking-wide text-white group-hover:text-emerald-400 transition-colors">
+            {bin.bin_id}
+          </h3>
+          <div className="flex items-center space-x-1.5 text-slate-500">
+            <MapPin className="h-3 w-3 text-slate-500" />
+            <span className="text-[10px] font-bold tracking-widest uppercase">
+              {bin.zone_id}
+            </span>
+          </div>
         </div>
+
         <div>
           {isOnline ? (
-            <span className="flex items-center text-[10px] text-green-400 bg-green-500/10 px-2 py-0.5 rounded-full font-semibold">
-              <Wifi className="h-3 w-3 mr-1" /> Online
+            <span className="flex items-center text-[10px] text-green-400 bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-full font-semibold">
+              <span className="h-1.5 w-1.5 rounded-full bg-green-400 animate-pulse mr-1.5"></span>
+              <Wifi className="h-3 w-3 mr-1" /> ONLINE
             </span>
           ) : (
-            <span className="flex items-center text-[10px] text-gray-400 bg-gray-500/10 px-2 py-0.5 rounded-full font-semibold">
-              <WifiOff className="h-3 w-3 mr-1" /> Offline
+            <span className="flex items-center text-[10px] text-slate-500 bg-slate-500/5 border border-slate-800/50 px-2.5 py-1 rounded-full font-semibold">
+              <WifiOff className="h-3 w-3 mr-1" /> OFFLINE
             </span>
           )}
         </div>
       </div>
 
-      {/* Fill Level Progress Indicator */}
-      <div className="my-3">
-        <div className="flex justify-between text-xs mb-1">
-          <span className="text-gray-400">Fill level</span>
-          <span className={`font-bold ${fillColorClass.split(" ")[1]}`}>
-            {bin.current_fill_pct !== null ? `${bin.current_fill_pct}%` : "0%"}
+      {/* Middle Row: Progress Bar and Percentage */}
+      <div className="my-4">
+        <div className="flex justify-between text-xs mb-1.5 font-bold">
+          <span className="text-slate-400 tracking-wider">
+            Garbage Capacity
           </span>
+          <span className={colors.text}>{fillPercent}%</span>
         </div>
-        <div className="w-full bg-gray-800 rounded-full h-2">
+        <div className="w-full bg-slate-950/60 rounded-full h-2.5 p-0.5 border border-slate-800/40">
           <div
-            className={`h-2 rounded-full transition-all duration-500 ${fillColorClass.split(" ")[0]}`}
-            style={{ width: `${bin.current_fill_pct || 0}%` }}
+            className={`h-1.5 rounded-full transition-all duration-700 ease-out ${colors.bar}`}
+            style={{ width: `${fillPercent}%` }}
           ></div>
         </div>
       </div>
 
-      <div className="text-[11px] text-gray-400 flex justify-between">
-        <span>
-          Last Update:{" "}
-          {bin.last_reading_at
-            ? new Date(bin.last_reading_at).toLocaleTimeString()
-            : "N/A"}
-        </span>
+      {/* Bottom Row: Last updated timestamp */}
+      <div className="text-[10px] text-slate-500 flex justify-between items-center border-t border-slate-800/30 pt-3 mt-1.5">
+        <div className="flex items-center space-x-1">
+          <Clock className="h-3 w-3 text-slate-600" />
+          <span>
+            Updated:{" "}
+            {bin.last_reading_at
+              ? new Date(bin.last_reading_at).toLocaleTimeString()
+              : "N/A"}
+          </span>
+        </div>
         {bin.last_emptied_at && (
-          <span className="text-emerald-400 font-medium">Emptied</span>
+          <span className="text-emerald-400/80 bg-emerald-500/5 border border-emerald-500/10 px-2 py-0.5 rounded font-bold tracking-widest text-[9px] uppercase">
+            CLEARED
+          </span>
         )}
       </div>
     </div>
