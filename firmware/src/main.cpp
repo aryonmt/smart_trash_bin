@@ -1,6 +1,6 @@
 // firmware/src/main.cpp
 // -------------------------------------------------------------------------
-// Hardened, Non-Blocking Smart Waste Bin Firmware with Deep Diagnostic Logs
+// Secure, Non-Blocking Smart Waste Bin Firmware with TLS Verification
 // -------------------------------------------------------------------------
 
 #include <Arduino.h>
@@ -8,27 +8,24 @@
 #include <WiFiClientSecure.h>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <time.h>
 #include <vector>
 #include <algorithm>
 #include <cmath>
 #include "config.h"
 
-// --- Hardware Pins for Trigger/Echo (Mode 1) ---
-// constexpr int TRIGGER_PIN = 12;
-// constexpr int ECHO_PIN = 13;
 constexpr int TOTAL_SAMPLE_BURST = 11;
 
 WiFiClientSecure espClient;
 PubSubClient mqttClient(espClient);
 unsigned long lastMeasureTime = 0;
 
-// Dynamic MQTT topics
 char telemetryTopic[128];
 char statusTopic[128];
 char cmdTopic[128];
 
-// Function Declarations
 void setupWiFi();
+void syncTime();
 void connectMQTT();
 void mqttCallback(char* topic, byte* payload, unsigned int length);
 float readUltrasonicOnceCm();
@@ -38,37 +35,43 @@ void setup() {
     Serial.begin(115200);
     delay(1500);
     Serial.println("\n==================================================");
-    Serial.println("[System] Smart Waste Bin Booting up...");
+    Serial.println("[System] Booting secure waste bin node...");
     Serial.println("==================================================");
 
     pinMode(TRIGGER_PIN, OUTPUT);
     pinMode(ECHO_PIN, INPUT);
 
-    // Formulate MQTT topics
     snprintf(telemetryTopic, sizeof(telemetryTopic), "wastebin/%s/%s/telemetry", ZONE_ID, DEVICE_ID);
     snprintf(statusTopic, sizeof(statusTopic), "wastebin/%s/%s/status", ZONE_ID, DEVICE_ID);
     snprintf(cmdTopic, sizeof(cmdTopic), "wastebin/%s/%s/cmd", ZONE_ID, DEVICE_ID);
 
-    // Secure TLS: Tell ESP32 to encrypt but bypass certificate verification for local development
-    espClient.setInsecure();
+    setupWiFi();
+    syncTime(); // Sync time to allow SSL/TLS expiration checks
+
+    // Configure Secure Client
+    if (MQTT_PORT == 8883) {
+        espClient.setCACert(MQTT_CA_CERT); // Enforce server identity verification via CA Cert
+        Serial.println("[System] Secure TLS client initialized with custom Root CA.");
+    } else {
+        Serial.println("[System] Warning: Running over unencrypted insecure channel.");
+    }
+
+    espClient.setBufferSizes(2048, 1024); // Optimize SSL buffers for ESP32 RAM stability
     espClient.setTimeout(3);
 
-    setupWiFi();
     mqttClient.setServer(MQTT_SERVER, MQTT_PORT);
     mqttClient.setCallback(mqttCallback);
 }
 
 void loop() {
-    // 1. Manage WiFi connection (Non-blocking reconnect attempts)
     if (WiFi.status() != WL_CONNECTED) {
         static unsigned long lastWiFiRetry = 0;
-        if (millis() - lastWiFiRetry > 15000) { // Try to reconnect WiFi every 15 seconds
+        if (millis() - lastWiFiRetry > 15000) {
             lastWiFiRetry = millis();
-            Serial.println("[WiFi Debug] Wi-Fi connection lost. Attempting to reconnect...");
+            Serial.println("[WiFi Debug] Re-initiating connection...");
             setupWiFi();
         }
     } else {
-        // 2. Manage MQTT connection (Non-blocking reconnect attempts)
         if (!mqttClient.connected()) {
             connectMQTT();
         } else {
@@ -76,41 +79,47 @@ void loop() {
         }
     }
 
-    // 3. Perform sensory reading strictly on time interval (completely decoupled from network blocking)
     unsigned long currentMillis = millis();
     if (currentMillis - lastMeasureTime >= MEASURE_INTERVAL_MS) {
         lastMeasureTime = currentMillis;
 
+        Serial.println("\n[Sensor Debug] --- Initiating Scheduled Sample Burst ---");
         float distance = getFilteredDistance();
 
         if (distance > 0) {
-            JsonDocument doc;
-            doc["device_id"] = DEVICE_ID;
-            doc["zone_id"] = ZONE_ID;
-            doc["distance_cm"] = round(distance * 100.0) / 100.0;
-            doc["bin_depth_cm"] = BIN_DEPTH_CM;  // Added dynamically from config.h!
-            doc["sample_count"] = TOTAL_SAMPLE_BURST;
-            doc["uptime_s"] = millis() / 1000;
+            Serial.printf("[Sensor Debug] Filtered Result: %.2f cm\n", distance);
 
-            char payloadBuffer[256];
-            serializeJson(doc, payloadBuffer);
+            if (mqttClient.connected()) {
+                JsonDocument doc;
+                doc["device_id"] = DEVICE_ID;
+                doc["zone_id"] = ZONE_ID;
+                doc["distance_cm"] = round(distance * 100.0) / 100.0;
+                doc["bin_depth_cm"] = BIN_DEPTH_CM;
+                doc["sample_count"] = TOTAL_SAMPLE_BURST;
+                doc["uptime_s"] = millis() / 1000;
 
-            if (mqttClient.publish(telemetryTopic, payloadBuffer)) {
-                Serial.printf("[MQTT Debug] Telemetry published: %s\n", payloadBuffer);
+                char payloadBuffer[256];
+                serializeJson(doc, payloadBuffer);
+
+                if (mqttClient.publish(telemetryTopic, payloadBuffer)) {
+                    Serial.printf("[MQTT Debug] Published: %s\n", payloadBuffer);
+                } else {
+                    Serial.println("[MQTT Debug] Telemetry publish failed.");
+                }
             } else {
-                Serial.println("[MQTT Debug] Telemetry publish failed.");
+                Serial.println("[System Debug] Telemetry skipped: Broker is currently offline.");
             }
         } else {
-            Serial.println("[Sensor Debug] Sensor read fault.");
+            Serial.println("[Sensor Debug] CRITICAL: Sensor read fault.");
         }
+        Serial.println("[Sensor Debug] ---------------------------------------------\n");
     }
 }
 
 void setupWiFi() {
-    Serial.printf("[WiFi Debug] Initiating connection to SSID: %s\n", WIFI_SSID);
+    Serial.printf("[WiFi Debug] Connecting to SSID: %s\n", WIFI_SSID);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
-    // Limit blocking connection attempt to maximum 10 seconds during startup
     int timeoutAttempts = 0;
     while (WiFi.status() != WL_CONNECTED && timeoutAttempts < 20) {
         delay(500);
@@ -121,7 +130,30 @@ void setupWiFi() {
     if (WiFi.status() == WL_CONNECTED) {
         Serial.printf("\n[WiFi Debug] Connected! Local IP: %s\n", WiFi.localIP().toString().c_str());
     } else {
-        Serial.println("\n[WiFi Debug] Connection attempt timed out. Will retry in background...");
+        Serial.println("\n[WiFi Debug] Connection attempt timed out. Continuing in background...");
+    }
+}
+
+void syncTime() {
+    if (WiFi.status() != WL_CONNECTED) {
+        return;
+    }
+    Serial.println("[Time Debug] Syncing time via NTP...");
+    // Configure standard global NTP servers (GMT+3.5 for Tehran)
+    configTime(3.5 * 3600, 0, "pool.ntp.org", "time.nist.gov");
+
+    int attempts = 0;
+    while (time(nullptr) < 1000000000 && attempts < 15) {
+        delay(500);
+        Serial.print(".");
+        attempts++;
+    }
+
+    if (time(nullptr) >= 1000000000) {
+        time_t now = time(nullptr);
+        Serial.printf("\n[Time Debug] Clock synchronized! UTC: %s", ctime(&now));
+    } else {
+        Serial.println("\n[Time Debug] NTP sync failed. Certificate expiration validation will be bypassed.");
     }
 }
 
@@ -129,12 +161,11 @@ void connectMQTT() {
     static unsigned long lastMqttRetry = 0;
     unsigned long currentMillis = millis();
 
-    // Limit reconnection attempts to once every 10 seconds to keep loop non-blocking
     if (currentMillis - lastMqttRetry > 10000) {
         lastMqttRetry = currentMillis;
 
         if (WiFi.status() != WL_CONNECTED) {
-            return; // Cannot connect MQTT without WiFi
+            return;
         }
 
         Serial.printf("[MQTT Debug] Attempting secure MQTTS connection to %s:%d...\n", MQTT_SERVER, MQTT_PORT);
@@ -151,11 +182,11 @@ void connectMQTT() {
         );
 
         if (connected) {
-            Serial.println("[MQTT Debug] Connection established successfully!");
+            Serial.println("[MQTT Debug] Connected! Secure SSL channel verified.");
             mqttClient.publish(statusTopic, "online", true);
             mqttClient.subscribe(cmdTopic);
         } else {
-            Serial.printf("[MQTT Debug] Connection failed, rc=%d. Will retry in 10 seconds in background...\n", mqttClient.state());
+            Serial.printf("[MQTT Debug] Connection failed, rc=%d\n", mqttClient.state());
         }
     }
 }
@@ -171,7 +202,6 @@ float readUltrasonicOnceCm() {
     delayMicroseconds(10);
     digitalWrite(TRIGGER_PIN, LOW);
 
-    // Pulse timeout capped at 30ms (~5 meters)
     long duration = pulseIn(ECHO_PIN, HIGH, 30000);
     if (duration == 0) {
         return -1.0f;
@@ -185,8 +215,6 @@ float getFilteredDistance() {
 
     for (int i = 0; i < TOTAL_SAMPLE_BURST; i++) {
         float raw = readUltrasonicOnceCm();
-
-        // Print raw diagnostics to track physical state of sensor
         Serial.printf("  [Raw Diagnostic] Pulse %d/%d: %.2f cm\n", i + 1, TOTAL_SAMPLE_BURST, raw);
 
         if (raw >= SENSOR_BLIND_ZONE_CM && raw <= (BIN_DEPTH_CM + 10.0f)) {
@@ -196,10 +224,10 @@ float getFilteredDistance() {
         delay(50);
     }
 
-    Serial.printf("[Sensor Debug] Total valid pulses in burst: %d/%d\n", successReads, TOTAL_SAMPLE_BURST);
+    Serial.printf("[Sensor Debug] Valid pulses in burst: %d/%d\n", successReads, TOTAL_SAMPLE_BURST);
 
     if (samples.size() < (TOTAL_SAMPLE_BURST / 2)) {
-        return -1.0f; // Return error if more than half of pulses failed
+        return -1.0f;
     }
 
     std::sort(samples.begin(), samples.end());

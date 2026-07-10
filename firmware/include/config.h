@@ -17,6 +17,7 @@ extern const char* MQTT_SERVER;
 extern const int MQTT_PORT;
 extern const char* MQTT_USER;
 extern const char* MQTT_PASSWORD;
+extern const char* MQTT_CA_CERT;
 
 // --- Hardware Pins (ESP32 DevKit V1) ---
 #define TRIGGER_PIN 12             // Hardware Trigger Pin
