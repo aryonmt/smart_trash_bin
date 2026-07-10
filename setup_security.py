@@ -8,7 +8,12 @@ import shutil
 import subprocess
 
 
-def run_command(command: list):
+def run_command(command: list) -> None:
+    """Executes a system shell command safely, validating return codes.
+
+    Args:
+        command: List of command arguments to pass to the subprocess.
+    """
     try:
         subprocess.run(command, check=True)
     except subprocess.CalledProcessError as e:
@@ -17,6 +22,11 @@ def run_command(command: list):
 
 
 def load_env() -> dict:
+    """Loads and parses the environmental secrets from the root .env file.
+
+    Returns:
+        dict: Parsed key-value pairs of environment credentials.
+    """
     env_vars = {}
     if not os.path.exists(".env"):
         print("[Error] No .env file found in root folder! Creating template first.")
@@ -33,12 +43,12 @@ def load_env() -> dict:
     return env_vars
 
 
-def main():
+def main() -> None:
+    """Orchestrates directory creations, SSL keys generation and MQTT password database."""
     print("=== Commencing Smart Waste Bin Security Provisioning ===")
 
     # 1. Load variables from environment
     env = load_env()
-    db_pass = env.get("DB_PASSWORD", "securepassword")
     bin_pass = env.get("MQTT_BIN_PASSWORD", "secure_bin_pass_2026")
     ingest_pass = env.get("MQTT_INGESTION_PASSWORD", "secure_ingestion_pass_2026")
 
@@ -49,7 +59,6 @@ def main():
     print(
         "\n[Step 1] Generating TLS/SSL self-signed certificates via Docker container..."
     )
-    # Determine platform path separators
     pwd_env = os.getcwd()
 
     cert_command = [
