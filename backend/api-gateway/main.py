@@ -1,6 +1,6 @@
 # backend/api-gateway/main.py
 # -------------------------------------------------------------------------
-# API Gateway - Enhanced with JWT Authentication & Role-Based Access Control
+# API Gateway - Enhanced with JWT Auth, RBAC and Secure Provisioning APIs
 # -------------------------------------------------------------------------
 
 import logging
@@ -17,7 +17,7 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from psycopg2.extras import RealDictCursor
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, constr
 
 # Configure logging
 logging.basicConfig(
@@ -26,9 +26,17 @@ logging.basicConfig(
 logger = logging.getLogger("APIGateway")
 
 # Security Configurations
-JWT_SECRET = os.getenv("JWT_SECRET", "super_secret_jwt_key_2026_smart_waste")
+JWT_SECRET = os.getenv("JWT_SECRET")
 JWT_ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
+
+# Fail-Fast Guard: Halted deployment if JWT_SECRET is missing or set to the vulnerable default
+if not JWT_SECRET or JWT_SECRET == "super_secret_jwt_key_2026_smart_waste":
+    logger.critical(
+        "FATAL SECURITY THREAT: The JWT_SECRET environment variable is missing, "
+        "empty, or configured with the vulnerable default value! Deployment halted to prevent token forgery."
+    )
+    raise RuntimeError("Insecure JWT_SECRET configuration. Deployment halted.")
 
 # Environment configurations
 DATABASE_URL = os.getenv(
@@ -40,12 +48,11 @@ REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 app = FastAPI(title="Smart Waste Bin IoT API Gateway")
 security = HTTPBearer()
 
-# backend/api-gateway/main.py (Modify CORS settings)
-
+# Configure CORS Middleware safely without cookie credential wildcard restrictions
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,  # FIXED: Wildcard (*) is now compatible because credentials are not passed via cookies
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -64,6 +71,7 @@ for attempt in range(1, 11):
 if not db_conn:
     exit(1)
 
+# Automatic Admin User Seeding with Hardened Password
 try:
     with db_conn.cursor() as cursor:
         # Check if users table is populated
@@ -75,7 +83,7 @@ try:
             logger.info(
                 "[STARTUP] No users found in database. Initializing default admin user..."
             )
-            raw_password = "adminpassword2026"
+            raw_password = "secure_admin_master_pass_2026"  # Hardened default password
             # Securely hash password using python-bcrypt inside the container
             hashed_password = bcrypt.hashpw(
                 raw_password.encode("utf-8"), bcrypt.gensalt()
@@ -118,12 +126,13 @@ class LoginRequest(BaseModel):
 
 
 class BinCreateRequest(BaseModel):
-    bin_id: str = Field(..., min_length=3)
-    zone_id: str = Field(..., min_length=3)
-    bin_depth_cm: float = Field(150.0, ge=100.0)
+    # Version-agnostic string constraints to bypass Pydantic V1/V2 min_length parameter differences
+    bin_id: constr(min_length=3)
+    zone_id: constr(min_length=3)
+    bin_depth_cm: float = Field(default=150.0, ge=100.0)
     label: Optional[str] = None
-    latitude: Optional[float] = Field(None, ge=-90.0, le=90.0)
-    longitude: Optional[float] = Field(None, ge=-180.0, le=180.0)
+    latitude: Optional[float] = Field(default=None, ge=-90.0, le=90.0)
+    longitude: Optional[float] = Field(default=None, ge=-180.0, le=180.0)
 
 
 class TokenResponse(BaseModel):

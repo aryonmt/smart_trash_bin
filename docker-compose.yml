@@ -85,6 +85,7 @@ services:
       - DATABASE_URL=postgresql://wastebin_app:${DB_PASSWORD}@timescaledb:5432/wastebin
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - JWT_SECRET=${JWT_SECRET} # Securely injected environment variable
     depends_on:
       - timescaledb
       - redis
