@@ -28,7 +28,8 @@ constexpr float BIN_DEPTH_CM = 150.0f;
 constexpr float SENSOR_BLIND_ZONE_CM = 20.0f;
 constexpr float FULL_LINE_CM = BIN_DEPTH_CM - SENSOR_BLIND_ZONE_CM;
 
-// Interval between measurement cycles (e.g., 5 seconds for testing)
-constexpr unsigned long MEASURE_INTERVAL_MS = 5000;
+// --- Dynamic Configurations (Remote Configurable) ---
+// Changed from constexpr to volatile extern to allow remote interval tuning
+extern volatile unsigned long measureIntervalMs;
 
 #endif // CONFIG_H
