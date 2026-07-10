@@ -6,10 +6,10 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the core domain logic directory and the main runner
-COPY domain/ ./domain/
-COPY main.py .
+# Copy the modular source package
+COPY src/ ./src/
 
 ENV PYTHONUNBUFFERED=1
 
-CMD ["python", "main.py"]
+# Execute module via python -m path to enable relative imports
+CMD ["python", "-m", "src.main"]

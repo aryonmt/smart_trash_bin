@@ -1,6 +1,6 @@
-# backend/fill-estimation-service/domain/models.py
+# backend/fill-estimation-service/src/domain/models.py
 # -------------------------------------------------------------------------
-# Domain Models for persistent state of waste bins
+# Domain Models for persistent state and configurations of waste bins
 # -------------------------------------------------------------------------
 
 from typing import Optional

@@ -1,6 +1,6 @@
-# backend/fill-estimation-service/domain/estimator.py
+# backend/fill-estimation-service/src/domain/estimator.py
 # -------------------------------------------------------------------------
-# Core algorithm to estimate the realistic fill percentage of a bin
+# Core stateful algorithm to estimate the realistic fill percentage of a bin
 # -------------------------------------------------------------------------
 
 from .models import BinConfig, BinFillState
@@ -12,6 +12,11 @@ def estimate_fill(
     raw_distance_cm: float,
 ) -> tuple[BinFillState, float, bool]:
     """Updates the bin state and calculates the confirmed fill percentage.
+
+    Args:
+        state: Persistent state of the bin.
+        config: Physical dimensions and parameters of the bin.
+        raw_distance_cm: Sensor distance reading for the current cycle.
 
     Returns:
         tuple: (updated_state, fill_percent, is_emptied_this_cycle)
@@ -57,7 +62,7 @@ def estimate_fill(
             state.confirmed_distance_cm, state.candidate_distance_cm
         )
 
-    # 3. Calculate finalized percentage (Fixed formula)
+    # 3. Calculate finalized percentage
     usable_depth = config.usable_depth_cm
     filled_depth = config.bin_depth_cm - state.confirmed_distance_cm
 

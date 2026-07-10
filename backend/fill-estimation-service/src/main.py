@@ -1,16 +1,16 @@
-# backend/fill-estimation-service/main.py
+# backend/fill-estimation-service/src/main.py
 # -------------------------------------------------------------------------
-# Stateful Fill Estimation Service with Deep Debugging Logs
+# Stateful Fill Estimation Service orchestrator and stream consumer
 # -------------------------------------------------------------------------
 
 import json
 import logging
-import os
 import time
 
-import redis
-from domain.estimator import estimate_fill
-from domain.models import BinConfig, BinFillState
+from .config import settings
+from .domain.estimator import estimate_fill
+from .domain.models import BinConfig, BinFillState
+from .redis_client import redis_client
 
 # Configure logging
 logging.basicConfig(
@@ -18,47 +18,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger("FillEstimationService")
 
-# Environment configurations
-REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
 
-# Redis Stream Configurations
-STREAM_TELEMETRY = "raw-telemetry"
-STREAM_FILL_UPDATED = "bin-fill-updated"
-CONSUMER_GROUP = "estimation-group"
-CONSUMER_NAME = "estimator-consumer-1"
-
-# Connect to Redis
-redis_client = None
-for attempt in range(1, 11):
-    try:
-        redis_client = redis.Redis(
-            host=REDIS_HOST, port=REDIS_PORT, decode_responses=True
-        )
-        redis_client.ping()
-        logger.info(f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}")
-        break
-    except Exception as e:
-        logger.warning(f"Redis connection attempt {attempt}/10 failed: {e}")
-        time.sleep(3)
-if not redis_client:
-    exit(1)
-
-# Create Consumer Group
-try:
-    redis_client.xgroup_create(STREAM_TELEMETRY, CONSUMER_GROUP, id="0", mkstream=True)
-    logger.info(
-        f"Created consumer group '{CONSUMER_GROUP}' on Stream '{STREAM_TELEMETRY}'"
-    )
-except redis.exceptions.ResponseError as e:
-    if "BUSYGROUP" not in str(e):
-        logger.error(f"Error creating consumer group: {e}")
-
-
-# backend/fill-estimation-service/main.py (Find process_stream_entry and replace variables block)
-
-
-def process_stream_entry(message_id: str, fields: dict):
+def process_stream_entry(message_id: str, fields: dict) -> None:
+    """Processes a telemetry entry, executes estimation rules, and writes back state."""
     try:
         device_id = fields.get("device_id")
         zone_id = fields.get("zone_id")
@@ -71,7 +33,7 @@ def process_stream_entry(message_id: str, fields: dict):
             logger.warning(f"Malformed stream entry {message_id} ignored.")
             return
 
-        # Configure state machine with the actual physical bin depth!
+        # Configure state machine with the actual physical bin depth
         config = BinConfig(bin_depth_cm=raw_depth)
 
         state_key = f"bin_state:{device_id}"
@@ -130,14 +92,16 @@ def process_stream_entry(message_id: str, fields: dict):
             "is_emptied": str(int(was_emptied)),
             "timestamp": str(int(time.time())),
         }
-        redis_client.xadd(STREAM_FILL_UPDATED, result_payload)
+        redis_client.xadd(settings.STREAM_FILL_UPDATED, result_payload)
 
         logger.info(
             f"RESULT: {device_id} ({zone_id}) | Estimated Fill: {fill_percent}% | Empty Event: {was_emptied}"
         )
         logger.info("-" * 80)
 
-        redis_client.xack(STREAM_TELEMETRY, CONSUMER_GROUP, message_id)
+        redis_client.xack(
+            settings.STREAM_TELEMETRY, settings.CONSUMER_GROUP, message_id
+        )
 
     except Exception as e:
         logger.error(f"Error processing stream message {message_id}: {e}")
@@ -148,9 +112,9 @@ def main():
     while True:
         try:
             streams_data = redis_client.xreadgroup(
-                groupname=CONSUMER_GROUP,
-                consumername=CONSUMER_NAME,
-                streams={STREAM_TELEMETRY: ">"},
+                groupname=settings.CONSUMER_GROUP,
+                consumername=settings.CONSUMER_NAME,
+                streams={settings.STREAM_TELEMETRY: ">"},
                 count=1,
                 block=1000,
             )
