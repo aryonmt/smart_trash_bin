@@ -19,15 +19,15 @@ extern const char* MQTT_USER;
 extern const char* MQTT_PASSWORD;
 
 // --- Hardware Pins (ESP32 DevKit V1) ---
-#define SENSOR_RX_PIN 16
-#define SENSOR_TX_PIN 17
+#define TRIGGER_PIN 12             // Hardware Trigger Pin
+#define ECHO_PIN 13                // Hardware Echo Pin
 
 // --- Physical Bin Constants ---
 constexpr float BIN_DEPTH_CM = 150.0f;
 constexpr float SENSOR_BLIND_ZONE_CM = 20.0f;
 constexpr float FULL_LINE_CM = BIN_DEPTH_CM - SENSOR_BLIND_ZONE_CM;
 
-// Interval between measurement cycles in milliseconds (e.g., 5 seconds for fast testing)
+// Interval between measurement cycles (e.g., 5 seconds for testing)
 constexpr unsigned long MEASURE_INTERVAL_MS = 5000;
 
 #endif // CONFIG_H

@@ -53,13 +53,19 @@ for attempt in range(1, 11):
         time.sleep(3)
 
 
+# backend/ingestion-service/main.py (Find TelemetryPayload and update)
+
+
 class TelemetryPayload(BaseModel):
-    """Resilient validation schema accepting both old and new firmware."""
+    """Resilient validation schema accepting both old and new firmware fields."""
 
     device_id: str = Field(..., min_length=3)
-    zone_id: Optional[str] = Field(default=None, min_length=3)  # Optional fallback
+    zone_id: Optional[str] = Field(default=None, min_length=3)
     distance_cm: float = Field(..., ge=0.0, le=1000.0)
-    sample_count: int = Field(default=11, ge=1, le=50)  # Defaults to 11 if missing
+    bin_depth_cm: float = Field(
+        default=150.0, ge=100.0, le=1000.0
+    )  # Added with fallback default
+    sample_count: int = Field(default=11, ge=1, le=50)
     uptime_s: int = Field(..., ge=0)
 
 

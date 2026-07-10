@@ -55,17 +55,25 @@ except redis.exceptions.ResponseError as e:
         logger.error(f"Error creating consumer group: {e}")
 
 
+# backend/fill-estimation-service/main.py (Find process_stream_entry and replace variables block)
+
+
 def process_stream_entry(message_id: str, fields: dict):
     try:
         device_id = fields.get("device_id")
         zone_id = fields.get("zone_id")
         raw_distance = float(fields.get("distance_cm"))
 
+        # Load the dynamic bin depth from Stream or fallback to 150.0
+        raw_depth = float(fields.get("bin_depth_cm", 150.0))
+
         if not device_id or not zone_id:
             logger.warning(f"Malformed stream entry {message_id} ignored.")
             return
 
-        config = BinConfig()
+        # Configure state machine with the actual physical bin depth!
+        config = BinConfig(bin_depth_cm=raw_depth)
+
         state_key = f"bin_state:{device_id}"
         stored_state = redis_client.get(state_key)
 

@@ -14,8 +14,8 @@
 #include "config.h"
 
 // --- Hardware Pins for Trigger/Echo (Mode 1) ---
-constexpr int TRIGGER_PIN = 12;
-constexpr int ECHO_PIN = 13;
+// constexpr int TRIGGER_PIN = 12;
+// constexpr int ECHO_PIN = 13;
 constexpr int TOTAL_SAMPLE_BURST = 11;
 
 WiFiClientSecure espClient;
@@ -81,36 +81,28 @@ void loop() {
     if (currentMillis - lastMeasureTime >= MEASURE_INTERVAL_MS) {
         lastMeasureTime = currentMillis;
 
-        Serial.println("\n[Sensor Debug] --- Initiating Scheduled Sample Burst ---");
         float distance = getFilteredDistance();
 
         if (distance > 0) {
-            Serial.printf("[Sensor Debug] Filtered Result: %.2f cm\n", distance);
+            JsonDocument doc;
+            doc["device_id"] = DEVICE_ID;
+            doc["zone_id"] = ZONE_ID;
+            doc["distance_cm"] = round(distance * 100.0) / 100.0;
+            doc["bin_depth_cm"] = BIN_DEPTH_CM;  // Added dynamically from config.h!
+            doc["sample_count"] = TOTAL_SAMPLE_BURST;
+            doc["uptime_s"] = millis() / 1000;
 
-            // Try to publish only if MQTT client is actively connected
-            if (mqttClient.connected()) {
-                JsonDocument doc;
-                doc["device_id"] = DEVICE_ID;
-                doc["zone_id"] = ZONE_ID;
-                doc["distance_cm"] = round(distance * 100.0) / 100.0;
-                doc["sample_count"] = TOTAL_SAMPLE_BURST;
-                doc["uptime_s"] = millis() / 1000;
+            char payloadBuffer[256];
+            serializeJson(doc, payloadBuffer);
 
-                char payloadBuffer[256];
-                serializeJson(doc, payloadBuffer);
-
-                if (mqttClient.publish(telemetryTopic, payloadBuffer)) {
-                    Serial.printf("[MQTT Debug] Published: %s\n", payloadBuffer);
-                } else {
-                    Serial.println("[MQTT Debug] ERRROR: Telemetry publish failed.");
-                }
+            if (mqttClient.publish(telemetryTopic, payloadBuffer)) {
+                Serial.printf("[MQTT Debug] Telemetry published: %s\n", payloadBuffer);
             } else {
-                Serial.println("[System Debug] Telemetry not published: MQTT broker is currently offline.");
+                Serial.println("[MQTT Debug] Telemetry publish failed.");
             }
         } else {
-            Serial.println("[Sensor Debug] CRITICAL: Sensor read fault (insufficient valid samples in burst).");
+            Serial.println("[Sensor Debug] Sensor read fault.");
         }
-        Serial.println("[Sensor Debug] ---------------------------------------------\n");
     }
 }
 
