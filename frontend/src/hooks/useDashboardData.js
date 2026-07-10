@@ -7,6 +7,9 @@ import { useState, useEffect, useCallback } from "react";
 import { api } from "../api";
 import { useAuth } from "../context/AuthContext";
 
+/**
+ * Custom React hook to manage real-time waste bin dashboard states.
+ */
 export default function useDashboardData() {
   const [bins, setBins] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -18,7 +21,6 @@ export default function useDashboardData() {
   const fetchHistory = useCallback(async (binId) => {
     try {
       const data = await api.getBinHistory(binId);
-      // Reverse so oldest data point is plotted first on the left
       setHistory(data.reverse());
     } catch (err) {
       console.error("Error fetching bin history logs:", err);
@@ -30,7 +32,6 @@ export default function useDashboardData() {
       const [binsData, alertsData] = await Promise.all([
         api.getBins(),
         api.getAlerts().catch((err) => {
-          // Restricted roles (e.g. drivers) might get 403 on alerts, handle gracefully
           if (err.message.includes("403")) return [];
           throw err;
         }),
@@ -39,14 +40,13 @@ export default function useDashboardData() {
       setBins(binsData);
       setAlerts(alertsData);
 
-      // Dynamically refresh selected bin's history
       if (selectedBin) {
         fetchHistory(selectedBin.bin_id);
       }
     } catch (err) {
       console.error("Dashboard live polling cycle failed:", err);
       if (err.message.includes("401") || err.message.includes("credentials")) {
-        logout(); // Session expired or invalid token
+        logout();
       }
     } finally {
       setLoading(false);
@@ -83,7 +83,7 @@ export default function useDashboardData() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 3000); // Poll every 3 seconds
+    const interval = setInterval(fetchData, 3000);
     return () => clearInterval(interval);
   }, [fetchData]);
 
