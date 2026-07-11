@@ -6,13 +6,13 @@ This document is the map of how they fit together. For the detailed responsibili
 
 ## The Services
 
-| Service | One-line role | README |
-|---|---|---|
-| **ingestion-service** | Only consumer of MQTT; validates payloads and anti-spoofs device identity, republishes onto Redis Streams | [`ingestion-service/README.md`](ingestion-service/README.md) |
-| **fill-estimation-service** | Stateful algorithm turning noisy raw distance readings into a trustworthy, monotonic fill percentage | [`fill-estimation-service/README.md`](fill-estimation-service/README.md) |
-| **persistence-service** | Only writer of `bins`/`readings` in TimescaleDB; enforces that only provisioned bins get persisted | [`persistence-service/README.md`](persistence-service/README.md) |
-| **alerting-service** | Rules engine; opens/resolves threshold-based alerts independently of the estimation and persistence paths | [`alerting-service/README.md`](alerting-service/README.md) |
-| **api-gateway** | The only service exposed outside the Docker network; JWT auth, RBAC, and all dashboard-facing REST endpoints | [`api-gateway/README.md`](api-gateway/README.md) |
+| Service                     | One-line role                                                                                                | README                                                                   |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------ |
+| **ingestion-service**       | Only consumer of MQTT; validates payloads and anti-spoofs device identity, republishes onto Redis Streams    | [`ingestion-service/README.md`](ingestion-service/README.md)             |
+| **fill-estimation-service** | Stateful algorithm turning noisy raw distance readings into a trustworthy, monotonic fill percentage         | [`fill-estimation-service/README.md`](fill-estimation-service/README.md) |
+| **persistence-service**     | Only writer of `bins`/`readings` in TimescaleDB; enforces that only provisioned bins get persisted           | [`persistence-service/README.md`](persistence-service/README.md)         |
+| **alerting-service**        | Rules engine; opens/resolves threshold-based alerts independently of the estimation and persistence paths    | [`alerting-service/README.md`](alerting-service/README.md)               |
+| **api-gateway**             | The only service exposed outside the Docker network; JWT auth, RBAC, and all dashboard-facing REST endpoints | [`api-gateway/README.md`](api-gateway/README.md)                         |
 
 None of these communicate directly with one another. A message produced by one is picked up by the next purely by virtue of which Redis Stream or database table it lands in — so any service can be scaled, restarted, or temporarily down without the others needing to know or care.
 
@@ -24,25 +24,25 @@ ESP32 Devices ─────────────▶ Mosquitto Broker
                                      │ MQTT
                                      ▼
                          ┌─────────────────────┐
-                         │  ingestion-service   │
-                         └──────────┬───────────┘
+                         │  ingestion-service  │
+                         └──────────┬──────────┘
                         ┌───────────┴────────────┐
-                        ▼                         ▼
+                        ▼                        ▼
              Stream: raw-telemetry       Stream: device-status
                         │                         │
                         ▼                         │
-           ┌─────────────────────────┐            │
-           │ fill-estimation-service │            │
-           └────────────┬────────────┘            │
+           ┌──────────────────────────┐            │
+           │ fill-estimation-service  │            │
+           └─────────────┬────────────┘            │
                          ▼                         │
              Stream: bin-fill-updated              │
               ┌──────────┴──────────┐              │
               ▼                     ▼              │
   ┌────────────────────┐  ┌────────────────────┐   │
-  │ persistence-service │  │  alerting-service  │   │
-  └──────────┬──────────┘  └──────────┬─────────┘   │
-             │                        │              │
-             └────────────┬───────────┴──────────────┘
+  │ persistence-service│  │  alerting-service  │   │
+  └──────────┬─────────┘  └──────────┬─────────┘   │
+             │                       │              │
+             └─────────────┬─────────┴──────────────┘
                            ▼
                      TimescaleDB
               (bins · readings · alerts · users)
@@ -58,24 +58,24 @@ ESP32 Devices ─────────────▶ Mosquitto Broker
 
 All inter-service communication (besides the MQTT hop into `ingestion-service`) goes through three Redis Streams, each consumed via one or more independent **consumer groups** — Streams keep per-group delivery/acknowledgment state, so multiple services (or multiple replicas of the same service) can read the same stream without stepping on each other, and a crashed-before-ack message is safely redelivered.
 
-| Stream | Producer | Consumer(s) / consumer group |
-|---|---|---|
-| `raw-telemetry` | ingestion-service | fill-estimation-service (`estimation-group`) |
-| `device-status` | ingestion-service | persistence-service (`persistence-status-group`) |
+| Stream             | Producer                | Consumer(s) / consumer group                                                                       |
+| ------------------ | ----------------------- | -------------------------------------------------------------------------------------------------- |
+| `raw-telemetry`    | ingestion-service       | fill-estimation-service (`estimation-group`)                                                       |
+| `device-status`    | ingestion-service       | persistence-service (`persistence-status-group`)                                                   |
 | `bin-fill-updated` | fill-estimation-service | persistence-service (`persistence-telemetry-group`), alerting-service (`alerting-telemetry-group`) |
 
-`fill-estimation-service` additionally keeps a small piece of *non-stream* state in Redis — one key per bin, `bin_state:{device_id}` — holding the in-progress `BinFillState` between measurement cycles. That key is cleared by `api-gateway` whenever a bin is manually emptied or deleted, so the algorithm always starts from a clean baseline after either event.
+`fill-estimation-service` additionally keeps a small piece of _non-stream_ state in Redis — one key per bin, `bin_state:{device_id}` — holding the in-progress `BinFillState` between measurement cycles. That key is cleared by `api-gateway` whenever a bin is manually emptied or deleted, so the algorithm always starts from a clean baseline after either event.
 
 ## TimescaleDB Ownership
 
 Every table in `postgres/init.sql` has exactly one writer, even though several services may read from it:
 
-| Table | Written by | Read by |
-|---|---|---|
-| `bins` | persistence-service (telemetry/status updates), api-gateway (provisioning, manual empty, delete) | api-gateway |
-| `readings` (hypertable) | persistence-service | api-gateway |
-| `alerts` | alerting-service (open/resolve), api-gateway (acknowledge) | api-gateway |
-| `users` | api-gateway (seeds the initial `admin` on first boot) | api-gateway |
+| Table                   | Written by                                                                                       | Read by     |
+| ----------------------- | ------------------------------------------------------------------------------------------------ | ----------- |
+| `bins`                  | persistence-service (telemetry/status updates), api-gateway (provisioning, manual empty, delete) | api-gateway |
+| `readings` (hypertable) | persistence-service                                                                              | api-gateway |
+| `alerts`                | alerting-service (open/resolve), api-gateway (acknowledge)                                       | api-gateway |
+| `users`                 | api-gateway (seeds the initial `admin` on first boot)                                            | api-gateway |
 
 This single-writer-per-table discipline is what lets each service's README describe its database behavior in isolation without needing to account for write conflicts from the others.
 
