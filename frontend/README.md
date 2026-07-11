@@ -5,10 +5,10 @@ The operator-facing web application for the Smart Waste Bin platform. A single-p
 ## Role in the Architecture
 
 ```
-┌─────────────────────────┐        REST + JWT         ┌──────────────┐
-│   Frontend Dashboard      │ ─────────────────────────▶ │  API Gateway │
-│   (this service)          │ ◀───────────────────────── │              │
-└─────────────────────────┘                             └──────────────┘
+┌─────────────────────────┐         REST + JWT         ┌──────────────┐
+│   Frontend Dashboard    │ ─────────────────────────▶ │  API Gateway │
+│   (this service)        │ ◀───────────────────────── │              │
+└─────────────────────────┘                            └──────────────┘
 ```
 
 This is a pure client — it holds no business logic of its own. Every number on screen is a direct reflection of what the API Gateway reports; the dashboard's only job is to fetch it, poll for freshness, and present it clearly to an operator, an administrator, or a driver, each with a different view depending on their role.
@@ -26,13 +26,13 @@ This is a pure client — it holds no business logic of its own. Every number on
 
 ## Tech Stack
 
-| Component | Choice |
-|---|---|
-| Framework | React 18 + Vite 5 |
-| Routing | `react-router-dom` v6 |
-| Styling | Tailwind CSS v3 (compiled via PostCSS — no CDN dependency) |
-| Charts | Recharts |
-| Icons | `lucide-react` |
+| Component         | Choice                                                             |
+| ----------------- | ------------------------------------------------------------------ |
+| Framework         | React 18 + Vite 5                                                  |
+| Routing           | `react-router-dom` v6                                              |
+| Styling           | Tailwind CSS v3 (compiled via PostCSS — no CDN dependency)         |
+| Charts            | Recharts                                                           |
+| Icons             | `lucide-react`                                                     |
 | Production server | Nginx (Alpine), serving the static build with SPA fallback routing |
 
 ## Project Structure
