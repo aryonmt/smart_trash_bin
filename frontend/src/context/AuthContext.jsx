@@ -3,17 +3,20 @@
 // Global state management provider for user authentication session
 // -------------------------------------------------------------------------
 
-import React, { createContext, useContext, useState, useEffect } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+} from "react";
 
 const AuthContext = createContext(null);
 
-/**
- * Provides authentication state and functions to its children components.
- */
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
 
-  // On initial app load, check session storage for existing authentication
   useEffect(() => {
     const token = sessionStorage.getItem("token");
     const username = sessionStorage.getItem("username");
@@ -24,7 +27,8 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  const login = (userData) => {
+  // Wrap in useCallback to preserve function reference across renders
+  const login = useCallback((userData) => {
     sessionStorage.setItem("token", userData.access_token);
     sessionStorage.setItem("username", userData.username);
     sessionStorage.setItem("role", userData.role);
@@ -33,28 +37,30 @@ export const AuthProvider = ({ children }) => {
       username: userData.username,
       role: userData.role,
     });
-  };
+  }, []);
 
-  const logout = () => {
+  // Wrap in useCallback to preserve function reference across renders
+  const logout = useCallback(() => {
     sessionStorage.clear();
     setUser(null);
-  };
+  }, []);
 
-  const authValue = {
-    user,
-    login,
-    logout,
-    isAuthenticated: !!user,
-  };
+  // Wrap in useMemo to prevent unnecessary context re-renders
+  const authValue = useMemo(
+    () => ({
+      user,
+      login,
+      logout,
+      isAuthenticated: !!user,
+    }),
+    [user, login, logout],
+  );
 
   return (
     <AuthContext.Provider value={authValue}>{children}</AuthContext.Provider>
   );
 };
 
-/**
- * Custom hook to easily access authentication context from any component.
- */
 export const useAuth = () => {
   return useContext(AuthContext);
 };
