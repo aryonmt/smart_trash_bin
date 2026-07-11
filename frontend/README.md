@@ -6,8 +6,8 @@ The operator-facing web application for the Smart Waste Bin platform. A single-p
 
 ```
 ┌─────────────────────────┐         REST + JWT         ┌──────────────┐
-│   Frontend Dashboard    │ ─────────────────────────▶│  API Gateway │
-│   (this service)        │ ◀─────────────────────────│              │
+│   Frontend Dashboard    │ ─────────────────────────▶ │  API Gateway │
+│   (this service)        │ ◀───────────────────────── │              │
 └─────────────────────────┘                            └──────────────┘
 ```
 
