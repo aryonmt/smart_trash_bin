@@ -6,7 +6,7 @@ The single public-facing entry point of the Smart Waste Bin platform's backend. 
 
 ```
                         ┌───────────────────────────┐
-Dashboard (frontend) ──▶        API Gateway         │
+Dashboard (frontend) ──▶        API Gateway        │
                         │  JWT Auth · RBAC · Routing│
                         └──────────┬────────────────┘
                                    │

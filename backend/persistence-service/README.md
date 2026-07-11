@@ -7,7 +7,7 @@ The durability layer of the Smart Waste Bin platform. This service is the only w
 ```
 Redis Stream: bin-fill-updated ──▶ Persistence Service ──▶ TimescaleDB: bins (live state)
 Redis Stream: device-status    ──▶        │                TimescaleDB: readings (history hypertable)
-                                            │
+                                          │
                                     (both consumed via
                                      dedicated consumer groups)
 ```
@@ -22,13 +22,13 @@ Redis Stream: device-status    ──▶        │                TimescaleDB: 
 
 ## Tech Stack
 
-| Component | Choice |
-|---|---|
-| Language | Python 3.11 |
-| Database | TimescaleDB (PostgreSQL) via `psycopg2-binary` |
-| Connection management | `psycopg2.pool.ThreadedConnectionPool` |
-| Message bus | Redis Streams (consumer groups) |
-| Container base | `python:3.11-slim` |
+| Component             | Choice                                         |
+| --------------------- | ---------------------------------------------- |
+| Language              | Python 3.11                                    |
+| Database              | TimescaleDB (PostgreSQL) via `psycopg2-binary` |
+| Connection management | `psycopg2.pool.ThreadedConnectionPool`         |
+| Message bus           | Redis Streams (consumer groups)                |
+| Container base        | `python:3.11-slim`                             |
 
 ## Project Structure
 
@@ -61,10 +61,10 @@ A strict `UPDATE ... WHERE bin_id = %s AND provisioned = TRUE` — intentionally
 
 ## Configuration
 
-| Variable | Default | Description |
-|---|---|---|
-| `REDIS_HOST` | `localhost` | Redis hostname |
-| `REDIS_PORT` | `6379` | Redis port |
+| Variable       | Default                                                            | Description                                                                                   |
+| -------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------- |
+| `REDIS_HOST`   | `localhost`                                                        | Redis hostname                                                                                |
+| `REDIS_PORT`   | `6379`                                                             | Redis port                                                                                    |
 | `DATABASE_URL` | `postgresql://wastebin_app:securepassword@localhost:5432/wastebin` | TimescaleDB connection string — **must** be overridden via environment in any real deployment |
 
 `CONSUMER_NAME` is derived automatically from the container's hostname, enabling safe horizontal scaling.
