@@ -4,6 +4,7 @@
 # -------------------------------------------------------------------------
 
 import logging
+import os
 import time
 
 import bcrypt
@@ -48,18 +49,33 @@ class DatabaseManager:
         self._seed_admin_user()
 
     def get_connection(self):
-        """Retrieve an active connection from the pool."""
+        """Retrieve an active connection from the pool with autocommit enabled."""
         if not self._pool:
             self.initialize()
-        return self._pool.getconn()
+        conn = self._pool.getconn()
+
+        conn.autocommit = True
+
+        return conn
 
     def release_connection(self, conn) -> None:
         """Return used connection safely back to the pool."""
         if self._pool and conn:
             self._pool.putconn(conn)
 
+    # backend/api-gateway/src/database.py (Replace _seed_admin_user method)
+
     def _seed_admin_user(self) -> None:
-        """Seeds the default admin account safely on pool initialization."""
+        """Seeds the default admin account dynamically using env variables on startup."""
+        initial_password = os.getenv("INITIAL_ADMIN_PASSWORD")
+        if not initial_password:
+            logger.critical(
+                "FATAL: INITIAL_ADMIN_PASSWORD environment variable is missing on startup!"
+            )
+            raise RuntimeError(
+                "Database user seeding failed due to missing configuration."
+            )
+
         conn = self.get_connection()
         try:
             with conn.cursor() as cursor:
@@ -71,9 +87,8 @@ class DatabaseManager:
                     logger.info(
                         "[STARTUP] No registered users detected. Seeding default master admin..."
                     )
-                    raw_password = "secure_admin_master_pass_2026"
                     hashed_password = bcrypt.hashpw(
-                        raw_password.encode("utf-8"), bcrypt.gensalt()
+                        initial_password.encode("utf-8"), bcrypt.gensalt()
                     ).decode("utf-8")
 
                     cursor.execute(
