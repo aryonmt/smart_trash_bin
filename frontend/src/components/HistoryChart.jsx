@@ -20,11 +20,12 @@ export default function HistoryChart({
   history,
   userRole,
   onManualEmpty,
+  onDeleteBin,
 }) {
   const isAuthorizeOverride = userRole === "admin" || userRole === "operator";
 
   return (
-    <section className="bg-slate-900/30 border border-slate-800/80 p-6 rounded-3xl shadow-2xl backdrop-blur-md flex-1 flex flex-col justify-between min-h-[360px] relative overflow-hidden transition-all duration-300">
+    <section className="bg-slate-900/30 border border-slate-800/80 p-6 rounded-2xl shadow-2xl backdrop-blur-md flex-1 flex flex-col justify-between min-h-[360px] relative overflow-hidden transition-all duration-300">
       {/* Background design glow */}
       <div className="absolute -bottom-20 -left-10 w-44 h-44 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
 
@@ -49,16 +50,30 @@ export default function HistoryChart({
           </div>
         </div>
 
+        {/* Admin actions toolbar */}
         {selectedBin && isAuthorizeOverride && (
-          <button
-            onClick={() => onManualEmpty(selectedBin.bin_id)}
-            className="flex items-center space-x-1.5 bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-emerald-500/5 hover:shadow-emerald-500/15"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-            <span>Force Reset Bin</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            {userRole === "admin" && (
+              <button
+                onClick={() => onDeleteBin(selectedBin.bin_id)}
+                className="flex items-center space-x-1.5 bg-red-500/10 hover:bg-red-500 border border-red-500/20 hover:border-red-500/40 text-red-400 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-red-500/5 hover:shadow-red-500/15"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span>Delete Bin</span>
+              </button>
+            )}
+            <button
+              onClick={() => onManualEmpty(selectedBin.bin_id)}
+              className="flex items-center space-x-1.5 bg-emerald-500/10 hover:bg-emerald-500 border border-emerald-500/20 hover:border-emerald-500/40 text-emerald-400 hover:text-white px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all duration-300 transform hover:-translate-y-0.5 active:translate-y-0 shadow-lg shadow-emerald-500/5 hover:shadow-emerald-500/15"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+              <span>Force Reset Bin</span>
+            </button>
+          </div>
         )}
       </div>
+
+      {/* Rest of the chart remains same... */}
 
       {/* Chart Area or Empty State */}
       {selectedBin ? (

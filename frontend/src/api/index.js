@@ -95,4 +95,12 @@ export const api = {
     });
     return handleResponse(response);
   },
+
+  deleteBin: async (binId) => {
+    const response = await fetch(`${API_BASE_URL}/api/bins/${binId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
 };

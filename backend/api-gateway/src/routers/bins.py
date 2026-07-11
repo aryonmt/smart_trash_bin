@@ -168,3 +168,40 @@ def create_bin(req: BinCreateRequest, user: dict = Depends(RoleChecker(["admin"]
         raise HTTPException(status_code=500, detail="Failed to register bin")
     finally:
         db_manager.release_connection(conn)
+
+
+# backend/api-gateway/src/routers/bins.py (Append this route to the end of the file)
+
+
+@router.delete("/{bin_id}", status_code=200)
+def delete_bin(bin_id: str, user: dict = Depends(RoleChecker(["admin"]))):
+    """Permanently deletes a bin and all its cascading history/alerts from database."""
+    conn = db_manager.get_connection()
+    try:
+        with conn.cursor() as cursor:
+            # 1. Verify if bin exists
+            cursor.execute("SELECT bin_id FROM bins WHERE bin_id = %s;", (bin_id,))
+            if not cursor.fetchone():
+                raise HTTPException(status_code=404, detail=f"Bin {bin_id} not found")
+
+            # 2. Delete from bins table (ON DELETE CASCADE automatically wipes readings and alerts)
+            cursor.execute("DELETE FROM bins WHERE bin_id = %s;", (bin_id,))
+
+        # 3. Wipe cached state from Redis
+        state_key = f"bin_state:{bin_id}"
+        redis_client.delete(state_key)
+
+        logger.warning(
+            f"[PROVISIONING] Bin {bin_id} permanently deleted by admin: {user['username']}."
+        )
+        return {
+            "status": "success",
+            "message": f"Bin {bin_id} and all related records deleted.",
+        }
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error deleting bin {bin_id}: {e}")
+        raise HTTPException(status_code=500, detail="Failed to delete bin")
+    finally:
+        db_manager.release_connection(conn)

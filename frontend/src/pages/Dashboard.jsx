@@ -18,6 +18,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const [showAddForm, setShowAddForm] = useState(false);
 
+  // Injected and destructured handleDeleteBin handler from custom hook
   const {
     bins,
     alerts,
@@ -28,6 +29,7 @@ export default function Dashboard() {
     selectBin,
     acknowledgeAlert,
     handleManualEmpty,
+    handleDeleteBin,
   } = useDashboardData();
 
   if (!user) return null;
@@ -47,7 +49,7 @@ export default function Dashboard() {
 
       {/* 2. Main Workspace Layout */}
       <main className="flex-1 p-6 grid grid-cols-1 lg:grid-cols-3 gap-6 max-w-7xl mx-auto w-full relative z-10">
-        {/* Left 2 Columns: Provisioning, Live Bins and History Chart */}
+        {/* Left 2 Columns */}
         <div className="lg:col-span-2 flex flex-col space-y-6">
           {/* Slide Form Panel (For admin role only) */}
           {showAddForm && user.role === "admin" && (
@@ -90,6 +92,7 @@ export default function Dashboard() {
             history={history}
             userRole={user.role}
             onManualEmpty={handleManualEmpty}
+            onDeleteBin={handleDeleteBin}
           />
         </div>
 
