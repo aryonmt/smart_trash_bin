@@ -5,13 +5,13 @@ The single public-facing entry point of the Smart Waste Bin platform's backend. 
 ## Role in the Architecture
 
 ```
-                       ┌────────────────────────────┐
-Dashboard (frontend) ──▶        API Gateway          │
-                       │  JWT Auth · RBAC · Routing  │
-                       └───────────┬────────────────┘
+                        ┌───────────────────────────┐
+Dashboard (frontend) ──▶        API Gateway         │
+                        │  JWT Auth · RBAC · Routing│
+                        └──────────┬────────────────┘
                                    │
                      ┌─────────────┼─────────────┐
-                     ▼                            ▼
+                     ▼                           ▼
               TimescaleDB                     Redis
         (bins, readings, alerts,        (login rate-limit
              users tables)                counters, bin state)
@@ -30,15 +30,15 @@ This service performs no MQTT or stream processing itself — it is a pure read/
 
 ## Tech Stack
 
-| Component | Choice |
-|---|---|
-| Language | Python 3.11 |
-| Web framework | FastAPI + Uvicorn |
-| Auth | `pyjwt` (HS256) + `bcrypt` password hashing |
-| Database | TimescaleDB (PostgreSQL) via `psycopg2-binary`, `RealDictCursor` |
-| Connection management | `psycopg2.pool.ThreadedConnectionPool` |
-| Rate limiting | Redis counters (sliding 15-minute window) |
-| Container base | `python:3.11-slim` |
+| Component             | Choice                                                           |
+| --------------------- | ---------------------------------------------------------------- |
+| Language              | Python 3.11                                                      |
+| Web framework         | FastAPI + Uvicorn                                                |
+| Auth                  | `pyjwt` (HS256) + `bcrypt` password hashing                      |
+| Database              | TimescaleDB (PostgreSQL) via `psycopg2-binary`, `RealDictCursor` |
+| Connection management | `psycopg2.pool.ThreadedConnectionPool`                           |
+| Rate limiting         | Redis counters (sliding 15-minute window)                        |
+| Container base        | `python:3.11-slim`                                               |
 
 ## Project Structure
 
@@ -70,36 +70,36 @@ All endpoints except `/api/auth/login` require an `Authorization: Bearer <token>
 
 ### Authentication
 
-| Method | Path | Access | Description |
-|---|---|---|---|
+| Method | Path              | Access | Description                                                                                                 |
+| ------ | ----------------- | ------ | ----------------------------------------------------------------------------------------------------------- |
 | `POST` | `/api/auth/login` | Public | Exchanges username/password for a JWT. Locks out an IP for 15 minutes after 5 failed attempts (HTTP `429`). |
 
 ### Bins
 
-| Method | Path | Access | Description |
-|---|---|---|---|
-| `GET` | `/api/bins` | admin, operator, driver | Lists bins. `operator`/`driver` accounts with a `zone_scope` only see bins in that zone. |
-| `POST` | `/api/bins` | admin | Provisions a new bin (`bin_id`, `zone_id`, `bin_depth_cm`, optional `label`/`latitude`/`longitude`). This is the **only** way a bin becomes eligible to have its telemetry accepted by the Persistence Service. |
-| `GET` | `/api/bins/{bin_id}/history?limit=30` | admin, operator, driver | Time-series reading history for one bin. `driver` accounts are additionally checked against their `zone_scope` before access is granted. |
-| `POST` | `/api/bins/{bin_id}/empty` | admin, operator | Manually marks a bin as emptied: resets `current_fill_pct` to 0, resolves any open alerts for that bin, inserts a synthetic "emptied" reading, and clears the bin's cached estimator state in Redis. |
-| `DELETE` | `/api/bins/{bin_id}` | admin | Permanently deletes a bin and all related history/alerts (`ON DELETE CASCADE`), and clears its Redis state. |
+| Method   | Path                                  | Access                  | Description                                                                                                                                                                                                     |
+| -------- | ------------------------------------- | ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/bins`                           | admin, operator, driver | Lists bins. `operator`/`driver` accounts with a `zone_scope` only see bins in that zone.                                                                                                                        |
+| `POST`   | `/api/bins`                           | admin                   | Provisions a new bin (`bin_id`, `zone_id`, `bin_depth_cm`, optional `label`/`latitude`/`longitude`). This is the **only** way a bin becomes eligible to have its telemetry accepted by the Persistence Service. |
+| `GET`    | `/api/bins/{bin_id}/history?limit=30` | admin, operator, driver | Time-series reading history for one bin. `driver` accounts are additionally checked against their `zone_scope` before access is granted.                                                                        |
+| `POST`   | `/api/bins/{bin_id}/empty`            | admin, operator         | Manually marks a bin as emptied: resets `current_fill_pct` to 0, resolves any open alerts for that bin, inserts a synthetic "emptied" reading, and clears the bin's cached estimator state in Redis.            |
+| `DELETE` | `/api/bins/{bin_id}`                  | admin                   | Permanently deletes a bin and all related history/alerts (`ON DELETE CASCADE`), and clears its Redis state.                                                                                                     |
 
 ### Alerts
 
-| Method | Path | Access | Description |
-|---|---|---|---|
-| `GET` | `/api/alerts?status=open` | admin, operator | Lists alerts. `status=open` (default) returns only unresolved alerts; any other value returns full history. |
-| `POST` | `/api/alerts/{alert_id}/acknowledge` | admin, operator | Records which operator acknowledged an alert. |
+| Method | Path                                 | Access          | Description                                                                                                 |
+| ------ | ------------------------------------ | --------------- | ----------------------------------------------------------------------------------------------------------- |
+| `GET`  | `/api/alerts?status=open`            | admin, operator | Lists alerts. `status=open` (default) returns only unresolved alerts; any other value returns full history. |
+| `POST` | `/api/alerts/{alert_id}/acknowledge` | admin, operator | Records which operator acknowledged an alert.                                                               |
 
 ## Configuration
 
-| Variable | Default | Description |
-|---|---|---|
-| `JWT_SECRET` | *(none — required)* | Signing secret for issued JWTs. The service refuses to start if this is unset or equal to a known insecure placeholder value. Generate with e.g. `openssl rand -hex 32`. |
-| `INITIAL_ADMIN_PASSWORD` | *(none — required)* | Plaintext password used once, at first startup, to seed the initial `admin` account (hashed with `bcrypt` before storage). The service refuses to start without it. |
-| `DATABASE_URL` | `postgresql://wastebin_app:securepassword@localhost:5432/wastebin` | TimescaleDB connection string — **must** be overridden via environment in any real deployment |
-| `REDIS_HOST` | `localhost` | Redis hostname |
-| `REDIS_PORT` | `6379` | Redis port |
+| Variable                 | Default                                                            | Description                                                                                                                                                              |
+| ------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `JWT_SECRET`             | _(none — required)_                                                | Signing secret for issued JWTs. The service refuses to start if this is unset or equal to a known insecure placeholder value. Generate with e.g. `openssl rand -hex 32`. |
+| `INITIAL_ADMIN_PASSWORD` | _(none — required)_                                                | Plaintext password used once, at first startup, to seed the initial `admin` account (hashed with `bcrypt` before storage). The service refuses to start without it.      |
+| `DATABASE_URL`           | `postgresql://wastebin_app:securepassword@localhost:5432/wastebin` | TimescaleDB connection string — **must** be overridden via environment in any real deployment                                                                            |
+| `REDIS_HOST`             | `localhost`                                                        | Redis hostname                                                                                                                                                           |
+| `REDIS_PORT`             | `6379`                                                             | Redis port                                                                                                                                                               |
 
 ## Running Locally
 
